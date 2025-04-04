@@ -37,10 +37,10 @@ def parse_args():
     parser.add_argument(
         "--model_path",
         type=str,
-        default="/data/pfs/checkpoints/Wan2.1-I2V-14B-720P-Diffusers/",
+        default="/mnt/workspace/checkpoints/Wan-AI/Wan2.1-I2V-14B-720P-Diffusers/",
     )
     parser.add_argument("--lora_path", type=Optional[str], default=None)
-    parser.add_argument("--weight_dtype", type=Literal["fp16", "bf16"], default="bf16")
+    parser.add_argument("--weight_dtype", type=str, default="bf16")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--width", type=int, default=1280)
@@ -51,7 +51,7 @@ def parse_args():
     parser.add_argument("--flow_shift", type=float, default=5.0)
     parser.add_argument("--sp_size", type=int, default=8)
     parser.add_argument("--sampling_steps", type=int, default=32)
-
+    return parser.parse_args()
 
 def infer(args):
     weight_dtype = torch.bfloat16
@@ -69,7 +69,7 @@ def infer(args):
 
     # Load models
     image_encoder = CLIPVisionModel.from_pretrained(
-        args.model_path, subfolder="image_encoder", torch_dtype=torch.float32
+        args.model_path, subfolder="image_encoder", torch_dtype=weight_dtype
     )
     vae = AutoencoderKLWan.from_pretrained(
         args.model_path,
@@ -148,18 +148,19 @@ def infer(args):
         image_prompt = prompt["image"]
 
         generator = torch.Generator(device="cuda").manual_seed(seed)
-        pt_images = pipe(
-            prompt=text_prompt,
-            image=image_prompt,
-            negative_prompt=negative_prompt,
-            height=args.height,
-            width=args.width,
-            num_inference_steps=args.sampling_steps,
-            num_frames=args.num_frames,
-            guidance_scale=args.cfg,
-            generator=generator,
-            output_type="pt",
-        ).frames[0]
+        with torch.amp.autocast("cuda", dtype=weight_dtype):
+            pt_images = pipe(
+                prompt=text_prompt,
+                image=image_prompt,
+                negative_prompt=negative_prompt,
+                height=args.height,
+                width=args.width,
+                num_inference_steps=args.sampling_steps,
+                num_frames=args.num_frames,
+                guidance_scale=args.cfg,
+                generator=generator,
+                output_type="pt",
+            ).frames[0]
         pt_images = torch.stack([pt_images[i] for i in range(pt_images.shape[0])])
         image_np = VaeImageProcessor.pt_to_numpy(pt_images)
         image_pil = VaeImageProcessor.numpy_to_pil(image_np)

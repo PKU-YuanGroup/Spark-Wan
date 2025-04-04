@@ -1,0 +1,9 @@
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+torchrun --nproc_per_node=8 infer.py \
+    --model_path "/mnt/workspace/checkpoints/Wan-AI/Wan2.1-I2V-14B-720P-Diffusers/" \
+    --sp_size 8 \
+    --height 720 \
+    --width 1280 \
+    --num_frames 81 \
+    --sampling_steps 8 \
+    --prompt_file scripts/prompt_i2v.json
