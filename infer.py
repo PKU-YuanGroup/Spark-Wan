@@ -1,5 +1,6 @@
 import sys
 import argparse
+
 sys.path.append(".")
 from typing import Literal, Optional
 import os
@@ -18,18 +19,24 @@ from peft import LoraConfig, get_peft_model
 from tqdm import tqdm
 from safetensors.torch import load_file
 
+
 def init_env(sp_size: int = 8):
     # init env
-    torch.backends.cudnn.deterministic=True
-    torch.backends.cudnn.benchmark=False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     dist.init_process_group(backend="nccl")
     torch.cuda.set_device(dist.get_rank())
     init_sequence_parallel_group(sp_size)
-    
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default="/data/pfs/checkpoints/Wan2.1-T2V-14B-Diffusers/")
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        default="/data/pfs/checkpoints/Wan2.1-T2V-14B-Diffusers/",
+    )
     parser.add_argument("--lora_path", type=Optional[str], default=None)
     parser.add_argument("--weight_dtype", type=Literal["fp16", "bf16"], default="bf16")
     parser.add_argument("--seed", type=int, default=1234)
@@ -42,6 +49,8 @@ def parse_args():
     parser.add_argument("--flow_shift", type=float, default=5.0)
     parser.add_argument("--sp_size", type=int, default=8)
     parser.add_argument("--sampling_steps", type=int, default=32)
+
+
 def infer(args):
     weight_dtype = torch.bfloat16
     seed = args.seed
@@ -92,14 +101,9 @@ def infer(args):
             lora_alpha=128,
             target_modules=lora_target_modules,
         )
-        transformer = get_peft_model(
-            transformer, lora_config
-        )
+        transformer = get_peft_model(transformer, lora_config)
 
-        state_dict = load_file(
-            args.lora_path,
-            device_map="cpu"
-        )
+        state_dict = load_file(args.lora_path, device_map="cpu")
 
         _, unexpected_keys = transformer.load_state_dict(state_dict, strict=False)
         assert len(unexpected_keys) == 0
@@ -108,7 +112,7 @@ def infer(args):
         prediction_type="flow_prediction",
         use_flow_sigmas=True,
         num_train_timesteps=1000,
-        flow_shift=flow_shift,
+        flow_shift=args.flow_shift,
     )
 
     pipe = WanPipeline.from_pretrained(
@@ -120,8 +124,6 @@ def infer(args):
     )
 
     pipe = pipe.to(device="cuda")
-
-    videos = []
 
     idx = 0
     for prompt in tqdm(prompts):

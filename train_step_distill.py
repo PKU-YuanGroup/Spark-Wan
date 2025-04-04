@@ -40,7 +40,6 @@ from peft import LoraConfig, get_peft_model
 import diffusers
 from diffusers import (
     UniPCMultistepScheduler,
-    FlowMatchEulerDiscreteScheduler,
     WanPipeline,
 )
 from diffusers.image_processor import VaeImageProcessor
@@ -153,7 +152,7 @@ def main(args: Args):
         discriminator = replace_rmsnorm_with_fp32(discriminator)
         if args.training_config.disc_gradient_checkpointing:
             discriminator.enable_gradient_checkpointing()
-        
+
         if args.model_config.is_train_disc_lora:
             discriminator.requires_grad_(False)
             discriminator.dis_head.requires_grad_(True)
@@ -165,13 +164,13 @@ def main(args: Args):
                 init_lora_weights=True,
             )
             discriminator = get_peft_model(discriminator, lora_config)
-        
+
         if args.model_config.fsdp_discriminator:
             prepare_fsdp_model(
                 discriminator,
                 shard_conditions=[lambda n, m: isinstance(m, WanTransformerBlock)],
                 cpu_offload=True,
-                reshard_after_forward=True, # Discriminator need to reshard after forward.
+                reshard_after_forward=True,  # Discriminator need to reshard after forward.
                 weight_dtype=weight_dtype,
             )
         else:
@@ -468,8 +467,10 @@ def main(args: Args):
                 for t in teacher_timesteps:
                     if guidance_scale != 0:
                         timestep = torch.tensor([t], device=device).repeat(bsz * 2)
-                        latents_teacher_input = teacher_noise_scheduler.scale_model_input(
-                            latents_teacher, t
+                        latents_teacher_input = (
+                            teacher_noise_scheduler.scale_model_input(
+                                latents_teacher, t
+                            )
                         )
                         latents_teacher_input = torch.concatenate(
                             [latents_teacher_input, latents_teacher_input], dim=0
@@ -485,15 +486,18 @@ def main(args: Args):
                         )[0]
                         cond_pred, uncond_pred = model_pred[:bsz], model_pred[bsz:]
                         noise_pred = (
-                            guidance_scale * cond_pred + (1 - guidance_scale) * uncond_pred
+                            guidance_scale * cond_pred
+                            + (1 - guidance_scale) * uncond_pred
                         )
                         latents_teacher = teacher_noise_scheduler.step(
                             noise_pred, t, latents_teacher, return_dict=False
                         )[0]
                     else:
                         timestep = torch.tensor([t], device=device).repeat(bsz)
-                        latents_teacher_input = teacher_noise_scheduler.scale_model_input(
-                            latents_teacher, t
+                        latents_teacher_input = (
+                            teacher_noise_scheduler.scale_model_input(
+                                latents_teacher, t
+                            )
                         )
                         model_pred = transformer(
                             hidden_states=latents_teacher_input,
@@ -576,7 +580,9 @@ def main(args: Args):
                             if args.model_config.fsdp_transformer:
                                 transformer.set_reshard_after_backward(True)
                         else:
-                            adaptive_disc_weight = torch.tensor(args.step_distill_config.default_disc_weight)
+                            adaptive_disc_weight = torch.tensor(
+                                args.step_distill_config.default_disc_weight
+                            )
                     else:
                         adaptive_disc_weight = torch.tensor(0.0)
                         g_loss = torch.tensor(0.0)

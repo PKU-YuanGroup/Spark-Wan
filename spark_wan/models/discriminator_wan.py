@@ -228,7 +228,7 @@ class WanDiscriminator(WanTransformer3DModel):
             encoder_hidden_states = SplitAndScatter.apply(
                 sequence_parallel_group, encoder_hidden_states, 1
             )  # b s d -> b s/p d
-        
+
         temb, timestep_proj, encoder_hidden_states, encoder_hidden_states_image = (
             self.condition_embedder(
                 timestep, encoder_hidden_states, encoder_hidden_states_image
@@ -258,7 +258,7 @@ class WanDiscriminator(WanTransformer3DModel):
                 )
 
         hidden_states = Gather.apply(sequence_parallel_group, hidden_states, 1)
-        
+
         # GAN Distill Need
         hidden_states = hidden_states.reshape(
             batch_size, num_frames, height, width, -1

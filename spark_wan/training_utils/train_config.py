@@ -130,12 +130,14 @@ class StepDistillConfig:
     discriminator_dropout: float = field(default=0.0)
     default_disc_weight: float = field(default=1e5)
 
+
 @dataclass
 class SelfLayerDistillConfig:
     layers_idx: List[int] = field(default_factory=list)
     scheduler: str = field(default="linear")
     zero_step: int = field(default=1000)
     scheduler_config: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class Args:
