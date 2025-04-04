@@ -57,7 +57,7 @@ check_min_version("0.33.0.dev0")
 
 
 def setup_distributed_env():
-    dist.init_process_group(backend="nccl")
+    dist.init_process_group(backend="cuda:nccl,cpu:gloo")
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
 
@@ -170,7 +170,7 @@ def main(args: Args):
             prepare_fsdp_model(
                 discriminator,
                 shard_conditions=[lambda n, m: isinstance(m, WanTransformerBlock)],
-                cpu_offload=False,
+                cpu_offload=True,
                 reshard_after_forward=True, # Discriminator need to reshard after forward.
                 weight_dtype=weight_dtype,
             )
@@ -694,6 +694,8 @@ def main(args: Args):
             del model_input
             del noise
             del loss
+            del latents_teacher
+            del latents_student
             free_memory()
 
             if (
