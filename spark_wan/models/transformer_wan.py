@@ -653,14 +653,12 @@ class WanTransformer3DModel(
         encoder_hidden_states_image: Optional[torch.Tensor] = None,
         return_dict: bool = True,
         attention_kwargs: Optional[Dict[str, Any]] = None,
-        output_alpha_states: bool = False,
-        output_reserve_states: bool = False,
         output_hidden_states: bool = False,
         output_hidden_states_idx: Optional[List[int]] = None,
     ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
-        assert not (
-            output_hidden_states and output_reserve_states and output_alpha_states
-        )
+        assert not self.is_partial_layer, "Partial layer is not supported. You need to implement a new forward function."
+        
+        
         if output_hidden_states_idx is None:
             output_hidden_states_idx = []
 
@@ -736,9 +734,7 @@ class WanTransformer3DModel(
         # 4. Transformer blocks
         if torch.is_grad_enabled() and self.gradient_checkpointing:
             # For Layer distill
-            reserve_hidden_state_list = []
             hidden_states_list = []
-            num_blocks = len(self.blocks)
             alpha_idx = 0
 
             # Main Loop
@@ -766,85 +762,37 @@ class WanTransformer3DModel(
                     )
 
                 # For Layer distill
-                if output_reserve_states or output_hidden_states:
-                    hidden_states = Gather.apply(
-                        sequence_parallel_group, hidden_states, 1
-                    )
-                if output_reserve_states and i >= num_blocks - self.reserve_layers - 1:
-                    reserve_hidden_state_list.append(hidden_states)
                 if output_hidden_states and i in output_hidden_states_idx:
                     hidden_states_list.append(hidden_states)
-                if output_reserve_states or output_hidden_states:
-                    if sequence_parallel_group:
-                        hidden_states = SplitAndScatter.apply(
-                            sequence_parallel_group, hidden_states, 1
-                        )
         else:
-            # For Layer distill
-            reserve_hidden_state_list = []
             hidden_states_list = []
-            num_blocks = len(self.blocks)
-            alpha_idx = 0
 
             # Main Loop
             for i, block in enumerate(self.blocks):
-                if i in (self.self_distill_layers_idx or []):
-                    degrading_hidden_states = block(
+                # When some block is float32, we need to convert the hidden_states and encoder_hidden_states to float32
+                # and then convert back to the original dtype.
+                if block.scale_shift_table.data.dtype == torch.float32:
+                    origin_dtype = hidden_states.dtype
+                    hidden_states = hidden_states.to(torch.float32)
+                    encoder_hidden_states = encoder_hidden_states.to(torch.float32)
+                    hidden_states = block(
                         hidden_states,
                         encoder_hidden_states,
                         timestep_proj,
                         rotary_emb,
                     )
-                    hidden_states = degrading_hidden_states * self.alphas[
-                        alpha_idx
-                    ] + hidden_states * (1 - self.alphas[alpha_idx])
-                    alpha_idx += 1
+                    hidden_states = hidden_states.to(origin_dtype)
+                    encoder_hidden_states = encoder_hidden_states.to(origin_dtype)
                 else:
-                    # When some block is float32, we need to convert the hidden_states and encoder_hidden_states to float32
-                    # and then convert back to the original dtype.
-                    if block.scale_shift_table.data.dtype == torch.float32:
-                        origin_dtype = hidden_states.dtype
-                        hidden_states = hidden_states.to(torch.float32)
-                        encoder_hidden_states = encoder_hidden_states.to(torch.float32)
-                        hidden_states = block(
-                            hidden_states,
-                            encoder_hidden_states,
-                            timestep_proj,
-                            rotary_emb,
-                        )
-                        hidden_states = hidden_states.to(origin_dtype)
-                        encoder_hidden_states = encoder_hidden_states.to(origin_dtype)
-                    else:
-                        hidden_states = block(
-                            hidden_states,
-                            encoder_hidden_states,
-                            timestep_proj,
-                            rotary_emb,
-                        )
-
-                # For Layer distill
-                if output_reserve_states or output_hidden_states:
-                    hidden_states = Gather.apply(
-                        sequence_parallel_group, hidden_states, 1
+                    hidden_states = block(
+                        hidden_states,
+                        encoder_hidden_states,
+                        timestep_proj,
+                        rotary_emb,
                     )
-                if output_reserve_states and i >= num_blocks - self.reserve_layers - 1:
-                    reserve_hidden_state_list.append(hidden_states)
+
                 if output_hidden_states and i in output_hidden_states_idx:
                     hidden_states_list.append(hidden_states)
-                if output_reserve_states or output_hidden_states:
-                    if sequence_parallel_group:
-                        hidden_states = SplitAndScatter.apply(
-                            sequence_parallel_group, hidden_states, 1
-                        )
-
-        if self.is_partial_layer and not output_hidden_states:
-            if output_reserve_states > 0:
-                return {
-                    "sample": reserve_hidden_state_list[-self.reserve_layers - 1],
-                    "reserve_hidden_states": reserve_hidden_state_list,
-                }
-            else:
-                return {"sample": hidden_states, "reserve_hidden_states": []}
 
         # 5. Output norm, projection & unpatchify
         with torch.amp.autocast("cuda", dtype=torch.float32):
@@ -878,6 +826,5 @@ class WanTransformer3DModel(
 
         return {
             "sample": output,
-            "hidden_states": hidden_states_list,
-            "alphas": self.alphas,
+            "hidden_states": hidden_states_list
         }

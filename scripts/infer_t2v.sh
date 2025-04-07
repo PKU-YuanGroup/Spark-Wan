@@ -5,10 +5,10 @@ torchrun --nproc_per_node=4 infer.py \
     --height 480 \
     --width 832 \
     --num_frames 81 \
-    --sampling_steps 32 \
-    --cfg 5.0 \
+    --sampling_steps 16 \
+    --cfg 0.0 \
     --seed 2002 \
     --prompt_file scripts/prompt_t2v.txt \
     --flow_shift 7.0 \
-    --transformer_subfolder "transformer" \
-    --output_dir "output/1.3B_32"
+    --transformer_subfolder "merged_model_16" \
+    --output_dir "output/1.3B_16"

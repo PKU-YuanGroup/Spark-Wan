@@ -1,11 +1,11 @@
-output_dir: 1_3B_8_4_only_gan_base_no_dropout
+output_dir: 1_3B_8_4_only_gan_seaweed_d_loss
 logging_dir: logs
 seed: 42
 
 report_to:
   wandb: true
   project_name: Spark-Wan
-  wandb_name: 1_3B_8_4_only_gan_base_no_dropout
+  wandb_name: 1_3B_8_4_only_gan_seaweed_d_loss
   wandb_notes: ""
   
 parallel_config:
@@ -31,7 +31,7 @@ model_config:
   lora_alpha: 512.0
   lora_dropout: 0.0
   flow_shift: 7.0
-  is_train_lora: false
+  is_train_lora: true
   lora_target_modules: null # set to null but not null inner.
   is_train_disc_lora: false
   disc_lora_rank: 128
@@ -82,3 +82,5 @@ step_distill_config:
   discriminator_dropout: 0.0
   discriminator_copy_num_layers: 30
   default_disc_weight: 8e5
+  discriminator_head_type: seaweed
+  disc_loss_type: d_loss

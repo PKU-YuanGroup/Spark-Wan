@@ -31,7 +31,7 @@ model_config:
   lora_alpha: 512.0
   lora_dropout: 0.0
   flow_shift: 7.0
-  is_train_lora: true
+  is_train_lora: false
   lora_target_modules: null # set to null but not null inner.
   is_train_disc_lora: false
   disc_lora_rank: 128
@@ -79,7 +79,7 @@ step_distill_config:
   scheduler_type: UniPC
   adaptive_weight: false
   reduce_func: sum
-  discriminator_dropout: 0.3
+  discriminator_dropout: 0.0
   discriminator_copy_num_layers: 30
   default_disc_weight: 8e5
   disc_loss_type: d_loss

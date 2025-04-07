@@ -38,4 +38,4 @@ torchrun \
   --node_rank $NODE_RANK \
   --nnodes $NNODES \
   train_step_distill.py \
-  --config scripts/step_distill/1_3B_8_4_only_gan_base.yaml
+  --config scripts/step_distill/1_3B_8_4_only_gan_seaweed.yaml

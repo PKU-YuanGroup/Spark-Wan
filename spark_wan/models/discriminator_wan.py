@@ -13,6 +13,12 @@
 # limitations under the License.
 
 from torch._tensor import Tensor
+
+
+from torch._tensor import Tensor
+
+
+from torch._tensor import Tensor
 from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
@@ -28,11 +34,61 @@ from diffusers.utils import (
     USE_PEFT_BACKEND,
     logging,
     scale_lora_layers,
-    unscale_lora_layers
+    unscale_lora_layers,
 )
 from diffusers.models.attention_processor import Attention
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+
+class SeaweedOutputHead(nn.Module):
+    def __init__(
+        self,
+        hidden_dim: int,
+        num_attention_heads: int,
+        attention_head_dim: int,
+        qk_norm: str,
+        eps: float,
+    ):
+        super().__init__()
+        self.embed = nn.Parameter(torch.randn(1, embed_seq_len, hidden_dim))
+        self.output_cross_attn = Attention(
+            query_dim=hidden_dim,
+            heads=num_attention_heads,
+            kv_heads=num_attention_heads,
+            dim_head=attention_head_dim,
+            qk_norm=qk_norm,
+            eps=eps,
+            bias=True,
+            cross_attention_dim=None,
+            out_bias=True,
+            processor=WanAttnProcessor2_0(),
+        )
+        self.output_mlp = nn.Sequential(
+            nn.RMSNorm(hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+
+    def forward(self, hidden_states: torch.Tensor):
+        batch_size = hidden_states.shape[0]
+        repeated_embed: Tensor = self.embed.repeat(batch_size, 1, 1)
+        
+        sequence_parallel_group = get_sequence_parallel_group()
+        
+        if sequence_parallel_group:
+            repeated_embed = SplitAndScatter.apply(
+                sequence_parallel_group, repeated_embed, 1
+            )
+            
+        cross_attention_output = self.output_cross_attn(
+            hidden_states=repeated_embed, encoder_hidden_states=hidden_states
+        )
+        updated_hidden_states: Tensor = cross_attention_output + repeated_embed
+        mlp_output: Tensor = self.output_mlp(updated_hidden_states)
+        
+        return mlp_output + updated_hidden_states
 
 
 class WanDiscriminator(WanTransformer3DModel):
@@ -103,6 +159,7 @@ class WanDiscriminator(WanTransformer3DModel):
         rope_max_seq_len: int = 1024,
         cnn_dropout: float = 0.0,
         head_type: str = "complex",
+        seaweed_output_layer: List[int] = [-1],
         embed_seq_len: int = 1024,
         **kwargs,
     ) -> None:
@@ -128,8 +185,7 @@ class WanDiscriminator(WanTransformer3DModel):
         if head_type == "complex":
             self.dis_head = nn.Sequential(
                 nn.Conv3d(
-                    num_attention_heads
-                    * attention_head_dim,
+                    num_attention_heads * attention_head_dim,
                     512,
                     kernel_size=(3, 3, 3),
                     stride=1,
@@ -154,8 +210,7 @@ class WanDiscriminator(WanTransformer3DModel):
         elif head_type == "simple":
             self.dis_head = nn.Sequential(
                 nn.Conv3d(
-                    num_attention_heads
-                    * attention_head_dim,
+                    num_attention_heads * attention_head_dim,
                     128,
                     kernel_size=(4, 4, 4),
                     stride=2,
@@ -166,29 +221,26 @@ class WanDiscriminator(WanTransformer3DModel):
                 nn.Conv3d(128, 1, kernel_size=(4, 4, 4), stride=2, padding=1),
             )
         elif head_type == "seaweed":
-            # Hard-coded for now
             hidden_dim = num_attention_heads * attention_head_dim
-            self.final_layer_input_embed = nn.Parameter(torch.randn(embed_seq_len, hidden_dim))
-            self.output_cross_attn = Attention(
-                query_dim=hidden_dim,
-                heads=num_attention_heads,
-                kv_heads=num_attention_heads,
-                dim_head=attention_head_dim,
-                qk_norm=qk_norm,
-                eps=eps,
-                bias=True,
-                cross_attention_dim=None,
-                out_bias=True,
-                processor=WanAttnProcessor2_0(),
+            self.seaweed_output_layer_idx = sorted(
+                [(self.num_layers + layer) if layer < 0 else layer for layer in seaweed_output_layer]
             )
-            self.output_mlp = nn.Sequential(
-                nn.RMSNorm(hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.GELU(),
-                nn.Linear(hidden_dim, hidden_dim),
+            print("seaweed_output_layer_idx", self.seaweed_output_layer_idx)
+            
+            self.seaweed_output_layers = nn.ModuleList(
+                [
+                    SeaweedOutputHead(
+                        hidden_dim=hidden_dim,
+                        num_attention_heads=num_attention_heads,
+                        attention_head_dim=attention_head_dim,
+                        qk_norm=qk_norm,
+                        eps=eps,
+                    )
+                    for _ in self.seaweed_output_layer_idx
+                ]
             )
             self.disc_head = nn.Sequential(
-                nn.RMSNorm(hidden_dim),
+                nn.RMSNorm(hidden_dim * len(self.seaweed_output_layer_idx)),
                 nn.Linear(hidden_dim, 1),
             )
         else:
@@ -221,11 +273,16 @@ class WanDiscriminator(WanTransformer3DModel):
                     "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
                 )
 
-        batch_size, num_channels, num_frames, latent_height, latent_width = hidden_states.shape
-        assert latent_height % self.patch_size[1] == 0 and latent_width % self.patch_size[2] == 0
+        batch_size, num_channels, num_frames, latent_height, latent_width = (
+            hidden_states.shape
+        )
+        assert (
+            latent_height % self.patch_size[1] == 0
+            and latent_width % self.patch_size[2] == 0
+        )
         hidden_states_height = latent_height // self.patch_size[1]
         hidden_states_width = latent_width // self.patch_size[2]
-        
+
         rotary_emb = self.rope(hidden_states)
 
         hidden_states = self.patch_embedding(hidden_states)
@@ -272,8 +329,9 @@ class WanDiscriminator(WanTransformer3DModel):
             )
 
         # 4. Transformer blocks
+        hidden_states_list = []
         if torch.is_grad_enabled() and self.gradient_checkpointing:
-            for block in self.blocks:
+            for idx, block in enumerate(self.blocks):
                 hidden_states = self._gradient_checkpointing_func(
                     block,
                     hidden_states,
@@ -281,29 +339,38 @@ class WanDiscriminator(WanTransformer3DModel):
                     timestep_proj,
                     rotary_emb,
                 )
+                if idx in self.seaweed_output_layer_idx:
+                    hidden_states_list.append(hidden_states)
         else:
-            for block in self.blocks:
+            for idx, block in enumerate(self.blocks):
                 hidden_states = block(
                     hidden_states, encoder_hidden_states, timestep_proj, rotary_emb
                 )
+                if idx in self.seaweed_output_layer_idx:
+                    hidden_states_list.append(hidden_states)
 
-        hidden_states = Gather.apply(sequence_parallel_group, hidden_states, 1)
-
-        # GAN Distill Need
-        hidden_states = hidden_states.reshape(
-            batch_size, num_frames, hidden_states_height, hidden_states_width, -1
-        )  # torch.Size([1, 21, 60, 104, 384])
-        hidden_states = hidden_states.permute(
-            0, 4, 1, 2, 3
-        )  # torch.Size([1, 384, 21, 60, 104])
         if self.head_type == "seaweed":
-            final_layer_input_embed = self.final_layer_input_embed.unsqueeze(0).repeat(batch_size, 1, 1)
-            final_cross_attn_output = self.output_cross_attn(hidden_states=final_layer_input_embed, encoder_hidden_states=hidden_states)
-            final_cross_attn_output = final_cross_attn_output + final_layer_input_embed
-            final_mlp_output: Tensor = self.output_mlp(final_cross_attn_output) + final_cross_attn_output
-            output = self.disc_head(final_mlp_output)
+            output_list = []
+            
+            for idx, hidden_states in enumerate(hidden_states_list):
+                output_list.append(self.seaweed_output_layers[idx](hidden_states))
+                
+            output = torch.cat(output_list, dim=1)
+            output = self.disc_head(output)
+            if sequence_parallel_group:
+                output = Gather.apply(sequence_parallel_group, output, 1)
             output = output.squeeze(-1)
         else:
+            # GAN Distill Need
+            if sequence_parallel_group:
+                output = Gather.apply(sequence_parallel_group, output, 1)
+
+            hidden_states = hidden_states.reshape(
+                batch_size, num_frames, hidden_states_height, hidden_states_width, -1
+            )  # torch.Size([1, 21, 60, 104, 384])
+            hidden_states = hidden_states.permute(
+                0, 4, 1, 2, 3
+            )  # torch.Size([1, 384, 21, 60, 104])
             output = self.dis_head(hidden_states)
 
         if USE_PEFT_BACKEND:

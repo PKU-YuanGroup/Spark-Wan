@@ -136,6 +136,8 @@ def main(args: Args):
         )
         model_config["cnn_dropout"] = args.step_distill_config.discriminator_dropout
         model_config["head_type"] = args.step_distill_config.discriminator_head_type
+        model_config["seaweed_output_layer"] = args.step_distill_config.discriminator_seaweed_output_layer
+        
         discriminator = WanDiscriminator(
             **model_config,
         )
@@ -596,12 +598,18 @@ def main(args: Args):
                         * args.step_distill_config.disc_weight
                         * g_loss
                     )
+                    loss = loss / args.training_config.gradient_accumulation_steps
                     scaler.scale(loss).backward()
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(
-                        transformer_lora_parameters, args.training_config.max_grad_norm
-                    )
-                    scaler.step(optimizer)
+                    
+                    if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
+                        scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            transformer_lora_parameters, args.training_config.max_grad_norm
+                        )
+                        scaler.step(optimizer)
+                        scaler.update()
+                        optimizer.zero_grad(set_to_none=True)
+                        lr_scheduler.step()
                 else:
                     unwrap_model(discriminator).requires_grad_(True)
                     score_teacher = discriminator(
@@ -621,12 +629,16 @@ def main(args: Args):
                     else:
                         loss = d_loss(score_teacher, score_student)
                         
+                    loss = loss / args.training_config.gradient_accumulation_steps
                     scaler.scale(loss).backward()
-                    scaler.unscale_(disc_optimizer)
-                    torch.nn.utils.clip_grad_norm_(
-                        disc_params, args.training_config.max_grad_norm
-                    )
-                    scaler.step(disc_optimizer)
+                    if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
+                        scaler.unscale_(disc_optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            disc_params, args.training_config.max_grad_norm
+                        )
+                        scaler.step(disc_optimizer)
+                        scaler.update()
+                        disc_optimizer.zero_grad(set_to_none=True)
             else:  # No gan
                 adaptive_disc_weight = torch.tensor(0.0)
 
@@ -634,21 +646,27 @@ def main(args: Args):
                     torch.abs(latents_student.float() - latents_teacher.float())
                 )
                 loss = rec_loss
+                loss = loss / args.training_config.gradient_accumulation_steps
                 scaler.scale(loss).backward()
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    transformer_lora_parameters, args.training_config.max_grad_norm
-                )
-                scaler.step(optimizer)
+                if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(
+                        transformer_lora_parameters, args.training_config.max_grad_norm
+                    )
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad(set_to_none=True)
+                    lr_scheduler.step()
 
-            scaler.update()
-            lr_scheduler.step()
-            if args.step_distill_config.is_gan_distill:
-                disc_optimizer.zero_grad(set_to_none=True)
-            optimizer.zero_grad(set_to_none=True)
-            progress_bar.update(1)
             global_step += 1
-
+            real_global_step = global_step // args.training_config.gradient_accumulation_steps
+            is_real_step = global_step % args.training_config.gradient_accumulation_steps == 0
+            
+            if not is_real_step:
+                continue
+            
+            progress_bar.update(1)
+            
             # Log to tracker
             if global_rank == 0:
                 if args.step_distill_config.is_gan_distill:
@@ -662,7 +680,7 @@ def main(args: Args):
                             .item(),
                         }
                         progress_bar.set_postfix(**logs)
-                        wandb.log(logs, step=global_step)
+                        wandb.log(logs, step=real_global_step)
                     else:
                         logs = {
                             "disc_loss": loss.detach().cpu().item(),
@@ -673,23 +691,23 @@ def main(args: Args):
                             "score_student": score_student.mean().detach().cpu().item(),
                         }
                         progress_bar.set_postfix(**logs)
-                        wandb.log(logs, step=global_step)
+                        wandb.log(logs, step=real_global_step)
                 else:
                     logs = {
                         "loss": loss.detach().item(),
                         "lr": lr_scheduler.get_last_lr()[0],
                     }
                     progress_bar.set_postfix(**logs)
-                    wandb.log(logs, step=global_step)
+                    wandb.log(logs, step=real_global_step)
 
-            if global_step % args.training_config.checkpointing_steps == 0:
+            if real_global_step % args.training_config.checkpointing_steps == 0:
                 dist.barrier()
                 checkpoint_path = os.path.join(
-                    args.output_dir, f"checkpoint-{global_step}"
+                    args.output_dir, f"checkpoint-{real_global_step}"
                 )
                 save_state(
                     output_dir=checkpoint_path,
-                    global_step=global_step,
+                    global_step=real_global_step,
                     model=unwrap_model(transformer),
                     is_fsdp=args.model_config.fsdp_transformer,
                     optimizer=optimizer,
@@ -701,7 +719,7 @@ def main(args: Args):
                 )
                 save_state(
                     output_dir=checkpoint_path,
-                    global_step=global_step,
+                    global_step=real_global_step,
                     model=unwrap_model(discriminator),
                     is_fsdp=args.model_config.fsdp_discriminator,
                     optimizer=disc_optimizer,
@@ -720,8 +738,8 @@ def main(args: Args):
             free_memory()
 
             if (
-                global_step % args.validation_config.validation_steps == 0
-                or global_step == 1
+                real_global_step % args.validation_config.validation_steps == 0
+                or real_global_step == 1
             ):
                 print(f"Validation {global_rank}")
                 noise_scheduler_valid = scheduler_type(**scheduler_kwargs)
@@ -753,11 +771,11 @@ def main(args: Args):
                             pipe=pipe,
                             args=args,
                             pipeline_args=pipeline_args,
-                            global_step=global_step,
+                            global_step=real_global_step,
                             phase_name="student/validation",
                             global_rank=global_rank,
                         )
-                    if global_step == 1 and args.validation_config.log_teacher_sample:
+                    if real_global_step == 1 and args.validation_config.log_teacher_sample:
                         unwrap_model(transformer).disable_adapter_layers()
                         pipeline_args["guidance_scale"] = 5.0
                         with torch.no_grad():
@@ -766,7 +784,7 @@ def main(args: Args):
                                 pipe=pipe,
                                 args=args,
                                 pipeline_args=pipeline_args,
-                                global_step=global_step,
+                                global_step=real_global_step,
                                 phase_name="teacher/teacher_step",
                                 global_rank=global_rank,
                             )
@@ -775,11 +793,12 @@ def main(args: Args):
                                 pipe=pipe,
                                 args=args,
                                 pipeline_args=pipeline_args,
-                                global_step=global_step,
+                                global_step=real_global_step,
                                 phase_name="teacher/student_step",
                                 global_rank=global_rank,
                             )
                         unwrap_model(transformer).enable_adapter_layers()
+                        
             if global_step >= args.training_config.max_train_steps:
                 break
 

@@ -79,7 +79,7 @@ step_distill_config:
   scheduler_type: UniPC
   adaptive_weight: false
   reduce_func: sum
-  discriminator_dropout: 0.3
+  discriminator_dropout: 0.0
   discriminator_copy_num_layers: 30
   default_disc_weight: 8e5
   discriminator_head_type: seaweed
