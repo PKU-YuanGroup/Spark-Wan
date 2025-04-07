@@ -21,7 +21,7 @@ from spark_wan.training_utils.fsdp2_utils import (
     save_state,
     unwrap_model,
 )
-from spark_wan.training_utils.gan_utils import calculate_adaptive_weight, hinge_d_loss
+from spark_wan.training_utils.gan_utils import calculate_adaptive_weight, hinge_d_loss, d_loss
 from spark_wan.training_utils.input_process import encode_prompt
 from spark_wan.training_utils.load_dataset import load_easyvideo_dataset
 from spark_wan.training_utils.load_model import (
@@ -130,7 +130,7 @@ def main(args: Args):
     # assert not (args.parallel_config.reshard_after_forward and args.step_distill_config.adaptive_weight)
 
     if args.step_distill_config.is_gan_distill:
-        model_config = transformer.config
+        model_config = unwrap_model(transformer).config
         model_config["num_layers"] = (
             args.step_distill_config.discriminator_copy_num_layers
         )
@@ -139,7 +139,7 @@ def main(args: Args):
         discriminator = WanDiscriminator(
             **model_config,
         )
-        pretrained_checkpoint = transformer.state_dict()
+        pretrained_checkpoint = unwrap_model(transformer).state_dict()
         missing_keys, unexpected_keys = discriminator.load_state_dict(
             pretrained_checkpoint, strict=False
         )
@@ -478,12 +478,13 @@ def main(args: Args):
                         input_context = torch.concatenate(
                             [prompt_embeds, uncond_context], dim=0
                         )
-                        model_pred = transformer(
-                            hidden_states=latents_teacher_input,
-                            timestep=timestep,
-                            encoder_hidden_states=input_context,
-                            return_dict=False,
-                        )[0]
+                        with torch.amp.autocast("cuda", dtype=weight_dtype):
+                            model_pred = transformer(
+                                hidden_states=latents_teacher_input,
+                                timestep=timestep,
+                                encoder_hidden_states=input_context,
+                                return_dict=False,
+                            )[0]
                         cond_pred, uncond_pred = model_pred[:bsz], model_pred[bsz:]
                         noise_pred = (
                             guidance_scale * cond_pred
@@ -499,12 +500,13 @@ def main(args: Args):
                                 latents_teacher, t
                             )
                         )
-                        model_pred = transformer(
-                            hidden_states=latents_teacher_input,
-                            timestep=timestep,
-                            encoder_hidden_states=prompt_embeds,
-                            return_dict=False,
-                        )[0]
+                        with torch.amp.autocast("cuda", dtype=weight_dtype):
+                            model_pred = transformer(
+                                hidden_states=latents_teacher_input,
+                                timestep=timestep,
+                                encoder_hidden_states=prompt_embeds,
+                                return_dict=False,
+                            )[0]
                         latents_teacher = teacher_noise_scheduler.step(
                             model_pred, t, latents_teacher, return_dict=False
                         )[0]
@@ -515,12 +517,13 @@ def main(args: Args):
             latents_student_input = student_noise_scheduler.scale_model_input(
                 latents_student, start_timestep
             )
-            model_pred = transformer(
-                hidden_states=latents_student_input,
-                timestep=start_timesteps,
-                encoder_hidden_states=prompt_embeds,
-                return_dict=False,
-            )[0]
+            with torch.amp.autocast("cuda", dtype=weight_dtype):
+                model_pred = transformer(
+                    hidden_states=latents_student_input,
+                    timestep=start_timesteps,
+                    encoder_hidden_states=prompt_embeds,
+                    return_dict=False,
+                )[0]
             latents_student = student_noise_scheduler.step(
                 model_pred, start_timestep, latents_student, return_dict=False
             )[0]
@@ -613,7 +616,11 @@ def main(args: Args):
                         encoder_hidden_states=prompt_embeds,
                         return_dict=False,
                     )
-                    loss = hinge_d_loss(score_teacher, score_student)
+                    if args.step_distill_config.disc_loss_type == "hinge":
+                        loss = hinge_d_loss(score_teacher, score_student)
+                    else:
+                        loss = d_loss(score_teacher, score_student)
+                        
                     scaler.scale(loss).backward()
                     scaler.unscale_(disc_optimizer)
                     torch.nn.utils.clip_grad_norm_(
@@ -688,9 +695,17 @@ def main(args: Args):
                     optimizer=optimizer,
                     dataloader=train_dataloader,
                     sampler=sampler,
-                    save_key_filter="lora",
+                    save_key_filter="lora" if args.model_config.is_train_lora else None,
                     scaler=scaler,
                     lr_scheduler=lr_scheduler,
+                )
+                save_state(
+                    output_dir=checkpoint_path,
+                    global_step=global_step,
+                    model=unwrap_model(discriminator),
+                    is_fsdp=args.model_config.fsdp_discriminator,
+                    optimizer=disc_optimizer,
+                    save_key_filter="lora" if args.model_config.is_train_disc_lora else None,
                 )
 
             # Free memory
@@ -733,7 +748,7 @@ def main(args: Args):
                         "width": args.data_config.width,
                         "num_inference_steps": step,
                     }
-                    with torch.no_grad():
+                    with torch.no_grad() and torch.amp.autocast("cuda", dtype=weight_dtype):
                         log_validation(
                             pipe=pipe,
                             args=args,

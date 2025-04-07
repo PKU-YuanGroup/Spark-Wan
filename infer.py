@@ -37,13 +37,14 @@ def parse_args():
         type=str,
         default="/mnt/workspace/checkpoints/Wan2.1-T2V-14B-Diffusers/",
     )
+    parser.add_argument("--transformer_subfolder", type=str, default="transformer")
     parser.add_argument("--lora_path", type=Optional[str], default=None)
     parser.add_argument("--weight_dtype", type=str, default="bf16")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--num_frames", type=int, default=81)
-    parser.add_argument("--cfg", type=int, default=5.0)
+    parser.add_argument("--cfg", type=float, default=5.0)
     parser.add_argument("--prompt_file", type=str, default="scripts/sora.txt")
     parser.add_argument("--output_dir", type=str, default="output")
     parser.add_argument("--flow_shift", type=float, default=5.0)
@@ -79,7 +80,7 @@ def infer(args):
     )
     transformer = WanTransformer3DModel.from_pretrained(
         args.model_path,
-        subfolder="transformer",
+        subfolder=args.transformer_subfolder,
         torch_dtype=weight_dtype,
     )
     transformer = replace_rmsnorm_with_fp32(transformer)

@@ -84,7 +84,9 @@ class EasyVideoDataset(Dataset):
                         "crop": item["crop"],
                     }
                 )
+            print(f"{base_dir} has {len(cache_data)} available videos")
             if not dist.is_initialized() or dist.get_rank() == 0:
+                print(f"Saving cache to {cache_path}")
                 with open(cache_path, "wb") as fi:
                     pickle.dump(cache_data, fi)
             self.data.extend(cache_data)

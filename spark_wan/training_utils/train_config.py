@@ -110,7 +110,6 @@ class ParallelConfig:
     sp_size: int = field(default=1)
     reshard_after_forward: bool = field(default=False)
 
-
 @dataclass
 class StepDistillConfig:
     teacher_step: int = field(default=32)
@@ -129,7 +128,7 @@ class StepDistillConfig:
     discriminator_head_type: str = field(default="complex")
     discriminator_dropout: float = field(default=0.0)
     default_disc_weight: float = field(default=1e5)
-
+    disc_loss_type: str = field(default="hinge")
 
 @dataclass
 class SelfLayerDistillConfig:

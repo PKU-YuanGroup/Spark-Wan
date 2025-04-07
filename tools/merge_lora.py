@@ -3,11 +3,11 @@ from peft import get_peft_model, LoraConfig
 from safetensors.torch import load_file
 
 state_dict_path = (
-    "/storage/lcm/Wan-Distill/Spark/14B_32_16_bf16/checkpoint-1000/model.safetensors"
+    "/mnt/data/lzj/codes/spark-wan/1_3B_16_8_only_l1/checkpoint-200/model.safetensors"
 )
 transformer = WanTransformer3DModel.from_pretrained(
-    "/storage/ysh/Ckpts/Wan2.1-T2V-14B-Diffusers/",
-    subfolder="transformer",
+    "/mnt/data/checkpoints/Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    subfolder="merged_model_16",
 )
 lora_target_modules = [
     "to_q",
@@ -18,7 +18,7 @@ lora_target_modules = [
     "ffn.net.0.proj",
     "ffn.net.2",
 ]
-lora_config = LoraConfig(r=64, lora_alpha=128, target_modules=lora_target_modules)
+lora_config = LoraConfig(r=256, lora_alpha=512, target_modules=lora_target_modules)
 transformer = get_peft_model(transformer, lora_config)
 state_dict = load_file(
     state_dict_path,
@@ -28,5 +28,5 @@ print(state_dict.keys())
 missing_keys, unexpected_keys = transformer.load_state_dict(state_dict, strict=False)
 transformer = transformer.merge_and_unload()
 transformer.save_pretrained(
-    "/storage/lcm/Wan-Distill/Spark/14B_32_16_bf16/checkpoint-1000/merged_model"
+    "/mnt/data/checkpoints/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/merged_model_8"
 )

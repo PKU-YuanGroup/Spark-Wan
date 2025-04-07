@@ -6,8 +6,10 @@ xformers==0.0.28.post3
 decord
 torchao==0.9.0
 ftfy==6.3.1
-# git+https://github.com/huggingface/diffusers@1357931d74e5ec5b187ddaa1da118672dd004f21
+# git+https://github.com/huggingface/diffuser
 opencv-python
 wandb[media]
 torchdata
 omegaconf
+diffusers
+tensorboard

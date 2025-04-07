@@ -22,3 +22,9 @@ def hinge_d_loss(logits_real, logits_fake):
     loss_fake = torch.mean(F.relu(1.0 + logits_fake))
     d_loss = 0.5 * (loss_real + loss_fake)
     return d_loss
+
+def d_loss(logits_real, logits_fake):
+    loss_real = - torch.log(torch.sigmoid(logits_real.float()) + 1e-6).mean()
+    loss_fake = - torch.log(1 - torch.sigmoid(logits_fake.float()) + 1e-6).mean()
+    return loss_real + loss_fake
+

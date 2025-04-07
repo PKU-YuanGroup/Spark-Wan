@@ -4,7 +4,7 @@ import torch
 from spark_wan.datasets.easyvideo import EasyVideoDataset
 from torchdata.stateful_dataloader import StatefulDataLoader
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
-
+import torch.distributed as dist
 
 def easy_collate_fn(examples):
     videos = [example["instance_video"].unsqueeze(0) for example in examples]
@@ -32,6 +32,7 @@ def load_easyvideo_dataset(
         num_frames=max_num_frames,
         video_data=json.load(open(instance_data_root)),
     )
+    
     sampler = StatefulDistributedSampler(
         train_dataset, rank=dp_rank, num_replicas=dp_size, shuffle=True
     )

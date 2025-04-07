@@ -1,44 +1,44 @@
-output_dir: 14B_16_8_bf16
+output_dir: 1_3B_8_4_only_gan_base_no_dropout
 logging_dir: logs
-seed: 2002
+seed: 42
 
 report_to:
   wandb: true
   project_name: Spark-Wan
-  wandb_name: 14B_16_8_bf16
+  wandb_name: 1_3B_8_4_only_gan_base_no_dropout
   wandb_notes: ""
-
+  
 parallel_config:
-  sp_size: 4
+  sp_size: 1
   reshard_after_forward: false
 
 data_config:
   instance_data_root: "scripts/sucai.json"
-  height: 720
-  width: 1280
-  fps: 8
+  height: 480
+  width: 832
+  fps: 16
   max_num_frames: 81
   dataloader_num_workers: 0
 
 model_config:
   pretrained_lora_path: null
-  pretrained_model_name_or_path: "/storage/ysh/Ckpts/Wan2.1-T2V-14B-Diffusers/"
+  pretrained_model_name_or_path: "/mnt/data/checkpoints/Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
   compile_transformer: false
-  fsdp_transformer: true
-  fsdp_text_encoder: true
+  fsdp_transformer: false
+  fsdp_text_encoder: false
   fsdp_discriminator: true
-  lora_rank: 64
-  lora_alpha: 128.0
+  lora_rank: 256
+  lora_alpha: 512.0
   lora_dropout: 0.0
-  flow_shift: 5.0
+  flow_shift: 7.0
   is_train_lora: true
   lora_target_modules: null # set to null but not null inner.
-  is_train_disc_lora: true
-  disc_lora_rank: 16
-  disc_lora_alpha: 32.0
+  is_train_disc_lora: false
+  disc_lora_rank: 128
+  disc_lora_alpha: 256.0
   disc_lora_dropout: 0.0
+  transformer_subfolder: "merged_model_8"
   disc_target_modules: null # set to null but not null inner.
-  transformer_subfolder: "merged_model"
 
 validation_config:
   validation_steps: 50
@@ -57,7 +57,7 @@ training_config:
   gradient_checkpointing: true
   disc_gradient_checkpointing: true
   mixed_precision: bf16
-  learning_rate: 0.00005
+  learning_rate: 0.000001
   lr_scheduler: constant
   optimizer: adamw
   adam_beta1: 0.9
@@ -67,18 +67,18 @@ training_config:
   max_grad_norm: 1.0
 
 step_distill_config:
-  teacher_step: 16
-  student_step: 8
-  guidance_scale_max: 0.0
-  guidance_scale_min: 1.5
+  teacher_step: 8
+  student_step: 4
+  guidance_scale_max: 0
+  guidance_scale_min: 0
   is_gan_distill: true
   disc_interval: 2
   disc_start: 0
-  distance_weight: 1.0
+  distance_weight: 0.0
   disc_weight: 1.0
   scheduler_type: UniPC
   adaptive_weight: false
   reduce_func: sum
-  discriminator_dropout: 0.3
-  discriminator_copy_num_layers: 4
-  default_disc_weight: 5e5
+  discriminator_dropout: 0.0
+  discriminator_copy_num_layers: 30
+  default_disc_weight: 8e5
