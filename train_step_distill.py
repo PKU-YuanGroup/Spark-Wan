@@ -67,6 +67,8 @@ def cleanup_distributed_env():
 def main(args: Args):
     setup_distributed_env()
 
+    set_seed(args.seed)
+    
     global_rank = dist.get_rank()
     local_rank = int(os.environ["LOCAL_RANK"])
     device = torch.cuda.current_device()
@@ -117,7 +119,7 @@ def main(args: Args):
         fsdp_text_encoder=args.model_config.fsdp_text_encoder,
         weight_dtype=weight_dtype,
         device=device,
-        is_train_lora=True,
+        is_train_lora=args.model_config.is_train_lora,
         lora_rank=args.model_config.lora_rank,
         lora_alpha=args.model_config.lora_alpha,
         lora_dropout=args.model_config.lora_dropout,
@@ -268,7 +270,7 @@ def main(args: Args):
         setup_sequence_parallel_group(args.parallel_config.sp_size)
     )
     set_seed(args.seed + dp_rank)
-
+    
     # Load dataset
     train_dataloader, sampler = load_easyvideo_dataset(
         height=args.data_config.height,
@@ -279,6 +281,7 @@ def main(args: Args):
         dataloader_num_workers=args.data_config.dataloader_num_workers,
         dp_rank=dp_rank,
         dp_size=dp_size,
+        seed=args.seed
     )
 
     # Initialize tracker
@@ -563,7 +566,14 @@ def main(args: Args):
                             encoder_hidden_states=prompt_embeds,
                             return_dict=False,
                         )
-                        g_loss = -torch.mean(score_student)
+                        if args.step_distill_config.disc_loss_type == "hinge":
+                            g_loss = -torch.mean(score_student)
+                        else:
+                            g_loss = torch.nn.functional.binary_cross_entropy_with_logits(
+                                score_student,
+                                torch.ones_like(score_student),
+                                reduction="mean",
+                            )
 
                         if args.step_distill_config.adaptive_weight:
                             if args.model_config.fsdp_transformer:
@@ -717,14 +727,16 @@ def main(args: Args):
                     scaler=scaler,
                     lr_scheduler=lr_scheduler,
                 )
-                save_state(
-                    output_dir=checkpoint_path,
-                    global_step=real_global_step,
-                    model=unwrap_model(discriminator),
-                    is_fsdp=args.model_config.fsdp_discriminator,
-                    optimizer=disc_optimizer,
-                    save_key_filter="lora" if args.model_config.is_train_disc_lora else None,
-                )
+                if args.step_distill_config.is_gan_distill:
+                    save_state(
+                        output_dir=checkpoint_path,
+                        global_step=real_global_step,
+                        model=unwrap_model(discriminator),
+                        is_fsdp=args.model_config.fsdp_discriminator,
+                        optimizer=disc_optimizer,
+                        save_key_filter="lora" if args.model_config.is_train_disc_lora else None,
+                        savesave_name_prefix="discriminator",
+                    )
 
             # Free memory
             del model_pred

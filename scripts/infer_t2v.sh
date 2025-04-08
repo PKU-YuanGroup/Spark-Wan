@@ -10,5 +10,5 @@ torchrun --nproc_per_node=4 infer.py \
     --seed 2002 \
     --prompt_file scripts/prompt_t2v.txt \
     --flow_shift 7.0 \
-    --transformer_subfolder "merged_model_16" \
-    --output_dir "output/1.3B_16"
+    --transformer_subfolder "distill_16" \
+    --output_dir "output/1.3B_16_v2"

@@ -78,6 +78,7 @@ def save_state(
     sampler=None,
     scaler=None,
     lr_scheduler=None,
+    save_name_prefix="",
 ):
     """Save FSDP2 state dict to file."""
     full_state_dict = {}
@@ -87,6 +88,9 @@ def save_state(
     full_scaler_state_dict = {}
     lr_scheduler_state_dict = {}
 
+    if save_name_prefix:
+        save_name_prefix += "_"
+    
     training_state = {"global_step": global_step}
 
     for key, value in model.state_dict().items():
@@ -122,26 +126,26 @@ def save_state(
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         safetensors.torch.save_file(
-            full_state_dict, os.path.join(output_dir, "model.safetensors")
+            full_state_dict, os.path.join(output_dir, save_name_prefix + "model.safetensors")
         )
-        torch.save(training_state, os.path.join(output_dir, "training_state.pth"))
+        torch.save(training_state, os.path.join(output_dir, save_name_prefix + "training_state.pth"))
         if len(full_optimizer_state_dict) > 0:  # optimizer is not None
             torch.save(
-                full_optimizer_state_dict, os.path.join(output_dir, "optimizer.pth")
+                full_optimizer_state_dict, os.path.join(output_dir, save_name_prefix + "optimizer.pth")
             )
         if len(full_dataloader_state_dict) > 0:  # dataloader is not None
             torch.save(
-                full_dataloader_state_dict, os.path.join(output_dir, "dataloader.pth")
+                full_dataloader_state_dict, os.path.join(output_dir, save_name_prefix + "dataloader.pth")
             )
         if len(full_sampler_state_dict) > 0:  # sampler is not None
-            torch.save(full_sampler_state_dict, os.path.join(output_dir, "sampler.pth"))
+            torch.save(full_sampler_state_dict, os.path.join(output_dir, save_name_prefix + "sampler.pth"))
 
         if len(full_scaler_state_dict) > 0:  # scaler is not None
-            torch.save(full_scaler_state_dict, os.path.join(output_dir, "scaler.pth"))
+            torch.save(full_scaler_state_dict, os.path.join(output_dir, save_name_prefix + "scaler.pth"))
 
         if len(lr_scheduler_state_dict) > 0:  # lr_scheduler is not None
             torch.save(
-                lr_scheduler_state_dict, os.path.join(output_dir, "lr_scheduler.pth")
+                lr_scheduler_state_dict, os.path.join(output_dir, save_name_prefix + "lr_scheduler.pth")
             )
 
 

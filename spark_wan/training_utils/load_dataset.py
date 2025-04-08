@@ -25,6 +25,7 @@ def load_easyvideo_dataset(
     dataloader_num_workers: int,
     dp_rank: int,
     dp_size: int,
+    seed: int = 42,
 ) -> StatefulDataLoader:
 
     train_dataset = EasyVideoDataset(
@@ -34,7 +35,7 @@ def load_easyvideo_dataset(
     )
     
     sampler = StatefulDistributedSampler(
-        train_dataset, rank=dp_rank, num_replicas=dp_size, shuffle=True
+        train_dataset, rank=dp_rank, num_replicas=dp_size, shuffle=True, seed=seed
     )
     train_dataloader = StatefulDataLoader(
         train_dataset,

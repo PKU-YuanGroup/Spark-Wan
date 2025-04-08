@@ -129,7 +129,7 @@ class StepDistillConfig:
     discriminator_dropout: float = field(default=0.0)
     default_disc_weight: float = field(default=1e5)
     disc_loss_type: str = field(default="hinge")
-    discriminator_seaweed_output_layer: List[int] = field(default_factory=list)
+    discriminator_seaweed_output_layer: List[int] = field(default_factory=lambda: [-1])
     
 @dataclass
 class SelfLayerDistillConfig:

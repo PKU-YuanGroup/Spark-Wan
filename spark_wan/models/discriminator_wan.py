@@ -19,7 +19,7 @@ from torch._tensor import Tensor
 
 
 from torch._tensor import Tensor
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union, List
 
 import torch
 import torch.nn as nn
@@ -49,6 +49,7 @@ class SeaweedOutputHead(nn.Module):
         attention_head_dim: int,
         qk_norm: str,
         eps: float,
+        embed_seq_len: int = 1024,
     ):
         super().__init__()
         self.embed = nn.Parameter(torch.randn(1, embed_seq_len, hidden_dim))
@@ -74,20 +75,20 @@ class SeaweedOutputHead(nn.Module):
     def forward(self, hidden_states: torch.Tensor):
         batch_size = hidden_states.shape[0]
         repeated_embed: Tensor = self.embed.repeat(batch_size, 1, 1)
-        
+
         sequence_parallel_group = get_sequence_parallel_group()
-        
+
         if sequence_parallel_group:
             repeated_embed = SplitAndScatter.apply(
                 sequence_parallel_group, repeated_embed, 1
             )
-            
+
         cross_attention_output = self.output_cross_attn(
             hidden_states=repeated_embed, encoder_hidden_states=hidden_states
         )
         updated_hidden_states: Tensor = cross_attention_output + repeated_embed
         mlp_output: Tensor = self.output_mlp(updated_hidden_states)
-        
+
         return mlp_output + updated_hidden_states
 
 
@@ -223,10 +224,13 @@ class WanDiscriminator(WanTransformer3DModel):
         elif head_type == "seaweed":
             hidden_dim = num_attention_heads * attention_head_dim
             self.seaweed_output_layer_idx = sorted(
-                [(self.num_layers + layer) if layer < 0 else layer for layer in seaweed_output_layer]
+                [
+                    (self.num_layers + layer) if layer < 0 else layer
+                    for layer in seaweed_output_layer
+                ]
             )
             print("seaweed_output_layer_idx", self.seaweed_output_layer_idx)
-            
+
             self.seaweed_output_layers = nn.ModuleList(
                 [
                     SeaweedOutputHead(
@@ -240,7 +244,7 @@ class WanDiscriminator(WanTransformer3DModel):
                 ]
             )
             self.disc_head = nn.Sequential(
-                nn.RMSNorm(hidden_dim * len(self.seaweed_output_layer_idx)),
+                nn.RMSNorm(hidden_dim),
                 nn.Linear(hidden_dim, 1),
             )
         else:
@@ -349,12 +353,12 @@ class WanDiscriminator(WanTransformer3DModel):
                 if idx in self.seaweed_output_layer_idx:
                     hidden_states_list.append(hidden_states)
 
-        if self.head_type == "seaweed":
+        if self.config.head_type == "seaweed":
             output_list = []
             
             for idx, hidden_states in enumerate(hidden_states_list):
                 output_list.append(self.seaweed_output_layers[idx](hidden_states))
-                
+
             output = torch.cat(output_list, dim=1)
             output = self.disc_head(output)
             if sequence_parallel_group:
