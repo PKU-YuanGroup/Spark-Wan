@@ -5,10 +5,10 @@ torchrun --nproc_per_node=4 infer.py \
     --height 480 \
     --width 832 \
     --num_frames 81 \
-    --sampling_steps 16 \
+    --sampling_steps 8 \
     --cfg 0.0 \
     --seed 2002 \
     --prompt_file scripts/prompt_t2v.txt \
     --flow_shift 7.0 \
-    --transformer_subfolder "distill_16" \
-    --output_dir "output/1.3B_16_v2"
+    --transformer_subfolder "distill_8" \
+    --output_dir "output/1.3B_8"

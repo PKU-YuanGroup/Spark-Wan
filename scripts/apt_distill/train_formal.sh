@@ -37,5 +37,5 @@ torchrun \
   --master_port $MASTER_PORT \
   --node_rank $NODE_RANK \
   --nnodes $NNODES \
-  train_step_distill.py \
-  --config scripts/step_distill/1_3B_16_8_formal.yaml
+  train_apt.py \
+  --config scripts/apt_distill/1_3B_16_2.yaml

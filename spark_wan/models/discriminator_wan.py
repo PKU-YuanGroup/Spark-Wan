@@ -183,8 +183,9 @@ class WanDiscriminator(WanTransformer3DModel):
             rope_max_seq_len,
             is_partial_layer=True,
         )
+        self.need_save_hidden_states = False
         if head_type == "complex":
-            self.dis_head = nn.Sequential(
+            self.disc_head = nn.Sequential(
                 nn.Conv3d(
                     num_attention_heads * attention_head_dim,
                     512,
@@ -209,7 +210,7 @@ class WanDiscriminator(WanTransformer3DModel):
                 nn.Conv3d(256, 1, kernel_size=(3, 3, 3), stride=1, padding=1),
             )
         elif head_type == "simple":
-            self.dis_head = nn.Sequential(
+            self.disc_head = nn.Sequential(
                 nn.Conv3d(
                     num_attention_heads * attention_head_dim,
                     128,
@@ -222,6 +223,7 @@ class WanDiscriminator(WanTransformer3DModel):
                 nn.Conv3d(128, 1, kernel_size=(4, 4, 4), stride=2, padding=1),
             )
         elif head_type == "seaweed":
+            self.need_save_hidden_states = True
             hidden_dim = num_attention_heads * attention_head_dim
             self.seaweed_output_layer_idx = sorted(
                 [
@@ -239,6 +241,7 @@ class WanDiscriminator(WanTransformer3DModel):
                         attention_head_dim=attention_head_dim,
                         qk_norm=qk_norm,
                         eps=eps,
+                        embed_seq_len=embed_seq_len
                     )
                     for _ in self.seaweed_output_layer_idx
                 ]
@@ -343,14 +346,14 @@ class WanDiscriminator(WanTransformer3DModel):
                     timestep_proj,
                     rotary_emb,
                 )
-                if idx in self.seaweed_output_layer_idx:
+                if self.need_save_hidden_states and idx in self.seaweed_output_layer_idx:
                     hidden_states_list.append(hidden_states)
         else:
             for idx, block in enumerate(self.blocks):
                 hidden_states = block(
                     hidden_states, encoder_hidden_states, timestep_proj, rotary_emb
                 )
-                if idx in self.seaweed_output_layer_idx:
+                if self.need_save_hidden_states and idx in self.seaweed_output_layer_idx:
                     hidden_states_list.append(hidden_states)
 
         if self.config.head_type == "seaweed":
@@ -375,7 +378,7 @@ class WanDiscriminator(WanTransformer3DModel):
             hidden_states = hidden_states.permute(
                 0, 4, 1, 2, 3
             )  # torch.Size([1, 384, 21, 60, 104])
-            output = self.dis_head(hidden_states)
+            output = self.disc_head(hidden_states)
 
         if USE_PEFT_BACKEND:
             # remove `lora_scale` from each PEFT layer

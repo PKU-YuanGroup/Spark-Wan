@@ -1,16 +1,15 @@
-output_dir: 1_3B_64_16_formal
+output_dir: D1_3B_16_2_apt
 logging_dir: logs
 seed: 42
 
 report_to:
   wandb: true
   project_name: Spark-Wan
-  wandb_name: 1_3B_64_16_formal
+  wandb_name: D1_3B_16_2_apt
   wandb_notes: ""
   
 parallel_config:
   sp_size: 1
-  reshard_after_forward: false
 
 data_config:
   instance_data_root: "scripts/sucai.json"
@@ -27,17 +26,19 @@ model_config:
   fsdp_transformer: false
   fsdp_text_encoder: false
   fsdp_discriminator: true
+  cpu_offload: []
+  reshard_after_forward: []
   lora_rank: 256
   lora_alpha: 512.0
   lora_dropout: 0.0
   flow_shift: 7.0
-  is_train_lora: true
-  lora_target_modules: null # set to null but not null inner.
+  is_train_lora: false
   is_train_disc_lora: false
+  lora_target_modules: null # set to null but not null inner.
   disc_lora_rank: 128
   disc_lora_alpha: 256.0
   disc_lora_dropout: 0.0
-  transformer_subfolder: "transformer"
+  transformer_subfolder: "distill_16"
   disc_target_modules: null # set to null but not null inner.
 
 validation_config:
@@ -57,28 +58,22 @@ training_config:
   gradient_checkpointing: true
   disc_gradient_checkpointing: true
   mixed_precision: bf16
-  learning_rate: 0.00001
+  learning_rate: 0.000001
   lr_scheduler: constant
   optimizer: adamw
-  adam_beta1: 0.9
+  adam_beta1: 0.0
   adam_beta2: 0.99
   adam_weight_decay: 0.0001
   adam_epsilon: 1e-08
   max_grad_norm: 1.0
 
-step_distill_config:
-  teacher_step: 64
-  student_step: 16
-  guidance_scale_max: 9
-  guidance_scale_min: 3
-  is_gan_distill: false
+apt_distill_config:
+  student_step: 2
   disc_interval: 2
-  disc_start: 0
-  distance_weight: 1.0
   disc_weight: 1.0
   scheduler_type: UniPC
-  adaptive_weight: false
-  reduce_func: sum
-  discriminator_dropout: 0.3
-  discriminator_copy_num_layers: 8
-  default_disc_weight: 8e5
+  discriminator_dropout: 0.0
+  discriminator_copy_num_layers: 30
+  discriminator_head_type: seaweed
+  discriminator_seaweed_output_layer: [-1, -9, -17]
+  disc_loss_type: d_loss

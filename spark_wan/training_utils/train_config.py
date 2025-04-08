@@ -31,8 +31,10 @@ class ModelConfig:
     fsdp_transformer: bool = field(default=False)
     fsdp_discriminator: bool = field(default=False)
     fsdp_text_encoder: bool = field(default=False)
+    cpu_offload: List[str] = field(default_factory=lambda: [])
+    reshard_after_forward: List[str] = field(default_factory=lambda: [])
     sp_size: int = field(default=1)
-    is_train_lora: bool = field(default=False)
+    is_train_lora: bool = field(default=True)
     lora_rank: int = field(default=128)
     lora_alpha: float = field(default=128)
     lora_dropout: float = field(default=0.0)
@@ -60,6 +62,7 @@ class ValidationConfig:
 class TrainingConfig:
     resume_from_checkpoint: Optional[str] = field(default=None)
     gradient_accumulation_steps: int = field(default=1)
+    graident_clipping: bool = field(default=True)
     max_train_steps: Optional[int] = field(default=None)
     checkpointing_steps: int = field(default=500)
     train_batch_size: int = field(default=4)
@@ -108,7 +111,6 @@ class TrainingConfig:
 @dataclass
 class ParallelConfig:
     sp_size: int = field(default=1)
-    reshard_after_forward: bool = field(default=False)
 
 @dataclass
 class StepDistillConfig:
@@ -130,7 +132,22 @@ class StepDistillConfig:
     default_disc_weight: float = field(default=1e5)
     disc_loss_type: str = field(default="hinge")
     discriminator_seaweed_output_layer: List[int] = field(default_factory=lambda: [-1])
+
+@dataclass
+class APTDistillConfig:
+    is_gan_distill: bool = field(default=True)
+    student_step: int = field(default=4)
+    disc_interval: int = field(default=2)
+    disc_weight: float = field(default=1.0)
+    scheduler_type: str = field(default="UniPC")
+    discriminator_copy_num_layers: int = field(default=4)
+    discriminator_head_type: str = field(default="complex")
+    discriminator_dropout: float = field(default=0.0)
+    default_disc_weight: float = field(default=1e5)
+    disc_loss_type: str = field(default="hinge")
+    discriminator_seaweed_output_layer: List[int] = field(default_factory=lambda: [-1])
     
+
 @dataclass
 class SelfLayerDistillConfig:
     layers_idx: List[int] = field(default_factory=list)
@@ -150,5 +167,6 @@ class Args:
     validation_config: ValidationConfig = field(default_factory=ValidationConfig)
     training_config: TrainingConfig = field(default_factory=TrainingConfig)
     step_distill_config: Optional[StepDistillConfig] = field(default=None)
+    apt_distill_config: Optional[APTDistillConfig] = field(default=None)
     self_layer_distill_config: Optional[SelfLayerDistillConfig] = field(default=None)
     logging_dir: str = field(default="logs")

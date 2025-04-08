@@ -9,3 +9,4 @@ logs
 wandb/
 *.mp4
 *.whl
+*.txt

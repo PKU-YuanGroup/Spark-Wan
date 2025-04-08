@@ -1,11 +1,11 @@
-output_dir: 1_3B_64_16_formal
+output_dir: D1_3B_16_8_seaweed_beta0_d_loss_multi_layer
 logging_dir: logs
 seed: 42
 
 report_to:
   wandb: true
   project_name: Spark-Wan
-  wandb_name: 1_3B_64_16_formal
+  wandb_name: D1_3B_16_8_seaweed_beta0_d_loss_multi_layer
   wandb_notes: ""
   
 parallel_config:
@@ -37,7 +37,7 @@ model_config:
   disc_lora_rank: 128
   disc_lora_alpha: 256.0
   disc_lora_dropout: 0.0
-  transformer_subfolder: "transformer"
+  transformer_subfolder: "distill_16"
   disc_target_modules: null # set to null but not null inner.
 
 validation_config:
@@ -57,28 +57,31 @@ training_config:
   gradient_checkpointing: true
   disc_gradient_checkpointing: true
   mixed_precision: bf16
-  learning_rate: 0.00001
+  learning_rate: 0.000001
   lr_scheduler: constant
   optimizer: adamw
-  adam_beta1: 0.9
+  adam_beta1: 0.0
   adam_beta2: 0.99
   adam_weight_decay: 0.0001
   adam_epsilon: 1e-08
   max_grad_norm: 1.0
 
 step_distill_config:
-  teacher_step: 64
-  student_step: 16
-  guidance_scale_max: 9
-  guidance_scale_min: 3
-  is_gan_distill: false
+  teacher_step: 16
+  student_step: 8
+  guidance_scale_max: 0
+  guidance_scale_min: 0
+  is_gan_distill: true
   disc_interval: 2
   disc_start: 0
-  distance_weight: 1.0
+  distance_weight: 0.0
   disc_weight: 1.0
   scheduler_type: UniPC
   adaptive_weight: false
   reduce_func: sum
-  discriminator_dropout: 0.3
-  discriminator_copy_num_layers: 8
+  discriminator_dropout: 0.0
+  discriminator_copy_num_layers: 30
   default_disc_weight: 8e5
+  discriminator_head_type: seaweed
+  disc_loss_type: d_loss
+  discriminator_seaweed_output_layer: [-1, -9, -17]

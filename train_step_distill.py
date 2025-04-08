@@ -111,75 +111,19 @@ def main(args: Args):
         "proj_out",
         "ffn.net.0.proj",
         "ffn.net.2",
+        "time_embedder.linear_1",
+        "time_embedder.linear_2",
+        "time_proj",
+        "patch_embedding"
     ]
-    tokenizer, text_encoder, transformer, vae = load_model(
-        pretrained_model_name_or_path=args.model_config.pretrained_model_name_or_path,
-        compile_transformer=args.model_config.compile_transformer,
-        fsdp_transformer=args.model_config.fsdp_transformer,
-        fsdp_text_encoder=args.model_config.fsdp_text_encoder,
+    tokenizer, text_encoder, transformer, vae, discriminator = load_model(
+        model_config=args.model_config,
+        training_config=args.training_config,
+        distill_config=args.step_distill_config,
         weight_dtype=weight_dtype,
         device=device,
-        is_train_lora=args.model_config.is_train_lora,
-        lora_rank=args.model_config.lora_rank,
-        lora_alpha=args.model_config.lora_alpha,
-        lora_dropout=args.model_config.lora_dropout,
-        lora_target_modules=lora_target_modules,
-        pretrained_lora_path=args.model_config.pretrained_lora_path,
-        reshard_after_forward=args.parallel_config.reshard_after_forward,
-        transformer_subfolder=args.model_config.transformer_subfolder,
+        lora_target_modules=lora_target_modules
     )
-    # Make sure the reshard_after_forward is not True when using adaptive weight.
-    # assert not (args.parallel_config.reshard_after_forward and args.step_distill_config.adaptive_weight)
-
-    if args.step_distill_config.is_gan_distill:
-        model_config = unwrap_model(transformer).config
-        model_config["num_layers"] = (
-            args.step_distill_config.discriminator_copy_num_layers
-        )
-        model_config["cnn_dropout"] = args.step_distill_config.discriminator_dropout
-        model_config["head_type"] = args.step_distill_config.discriminator_head_type
-        model_config["seaweed_output_layer"] = args.step_distill_config.discriminator_seaweed_output_layer
-        
-        discriminator = WanDiscriminator(
-            **model_config,
-        )
-        pretrained_checkpoint = unwrap_model(transformer).state_dict()
-        missing_keys, unexpected_keys = discriminator.load_state_dict(
-            pretrained_checkpoint, strict=False
-        )
-        print(
-            f"DISC: missing_keys {len(missing_keys)} {missing_keys}, unexpected_keys {len(unexpected_keys)}"
-        )
-        print(
-            f"DISC: Successfully load {len(pretrained_checkpoint) - len(missing_keys)}/{len(pretrained_checkpoint)} keys!"
-        )
-        discriminator = replace_rmsnorm_with_fp32(discriminator)
-        if args.training_config.disc_gradient_checkpointing:
-            discriminator.enable_gradient_checkpointing()
-
-        if args.model_config.is_train_disc_lora:
-            discriminator.requires_grad_(False)
-            discriminator.dis_head.requires_grad_(True)
-            lora_config = LoraConfig(
-                r=args.model_config.disc_lora_rank,
-                target_modules=lora_target_modules,
-                lora_alpha=args.model_config.disc_lora_alpha,
-                lora_dropout=args.model_config.disc_lora_dropout,
-                init_lora_weights=True,
-            )
-            discriminator = get_peft_model(discriminator, lora_config)
-
-        if args.model_config.fsdp_discriminator:
-            prepare_fsdp_model(
-                discriminator,
-                shard_conditions=[lambda n, m: isinstance(m, WanTransformerBlock)],
-                cpu_offload=True,
-                reshard_after_forward=True,  # Discriminator need to reshard after forward.
-                weight_dtype=weight_dtype,
-            )
-        else:
-            discriminator = discriminator.to(device)
-            discriminator = DistributedDataParallel(discriminator, device_ids=[device])
 
     # Setup distillation parameters
     if args.step_distill_config.scheduler_type == "UniPC":
@@ -536,9 +480,10 @@ def main(args: Args):
             if (
                 args.step_distill_config.is_gan_distill
             ):  # If training with discriminator
+                real_global_step = (global_step + 1) // args.training_config.gradient_accumulation_steps
                 is_generator_step = (
-                    step % args.step_distill_config.disc_interval == 0
-                    or step < args.step_distill_config.disc_start
+                    real_global_step % args.step_distill_config.disc_interval == 0
+                    or real_global_step < args.step_distill_config.disc_start
                 )
                 if is_generator_step:
                     unwrap_model(discriminator).requires_grad_(False)
@@ -612,10 +557,11 @@ def main(args: Args):
                     scaler.scale(loss).backward()
                     
                     if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
-                        scaler.unscale_(optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            transformer_lora_parameters, args.training_config.max_grad_norm
-                        )
+                        if args.training_config.graident_clipping:
+                            scaler.unscale_(optimizer)
+                            torch.nn.utils.clip_grad_norm_(
+                                transformer_lora_parameters, args.training_config.max_grad_norm
+                            )
                         scaler.step(optimizer)
                         scaler.update()
                         optimizer.zero_grad(set_to_none=True)
@@ -642,10 +588,11 @@ def main(args: Args):
                     loss = loss / args.training_config.gradient_accumulation_steps
                     scaler.scale(loss).backward()
                     if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
-                        scaler.unscale_(disc_optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            disc_params, args.training_config.max_grad_norm
-                        )
+                        if args.training_config.graident_clipping:
+                            scaler.unscale_(disc_optimizer)
+                            torch.nn.utils.clip_grad_norm_(
+                                disc_params, args.training_config.max_grad_norm
+                            )
                         scaler.step(disc_optimizer)
                         scaler.update()
                         disc_optimizer.zero_grad(set_to_none=True)
@@ -659,10 +606,11 @@ def main(args: Args):
                 loss = loss / args.training_config.gradient_accumulation_steps
                 scaler.scale(loss).backward()
                 if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(
-                        transformer_lora_parameters, args.training_config.max_grad_norm
-                    )
+                    if args.training_config.graident_clipping:
+                        scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            transformer_lora_parameters, args.training_config.max_grad_norm
+                        )
                     scaler.step(optimizer)
                     scaler.update()
                     optimizer.zero_grad(set_to_none=True)
@@ -694,9 +642,6 @@ def main(args: Args):
                     else:
                         logs = {
                             "disc_loss": loss.detach().cpu().item(),
-                            "adaptive_disc_weight": adaptive_disc_weight.detach()
-                            .cpu()
-                            .item(),
                             "score_teacher": score_teacher.mean().detach().cpu().item(),
                             "score_student": score_student.mean().detach().cpu().item(),
                         }
@@ -735,7 +680,7 @@ def main(args: Args):
                         is_fsdp=args.model_config.fsdp_discriminator,
                         optimizer=disc_optimizer,
                         save_key_filter="lora" if args.model_config.is_train_disc_lora else None,
-                        savesave_name_prefix="discriminator",
+                        save_name_prefix="discriminator",
                     )
 
             # Free memory
