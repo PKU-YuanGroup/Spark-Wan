@@ -33,7 +33,6 @@ class ModelConfig:
     fsdp_text_encoder: bool = field(default=False)
     cpu_offload: List[str] = field(default_factory=lambda: [])
     reshard_after_forward: List[str] = field(default_factory=lambda: [])
-    sp_size: int = field(default=1)
     is_train_lora: bool = field(default=True)
     lora_rank: int = field(default=128)
     lora_alpha: float = field(default=128)

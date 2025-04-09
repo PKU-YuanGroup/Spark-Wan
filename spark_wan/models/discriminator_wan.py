@@ -370,7 +370,7 @@ class WanDiscriminator(WanTransformer3DModel):
         else:
             # GAN Distill Need
             if sequence_parallel_group:
-                output = Gather.apply(sequence_parallel_group, output, 1)
+                hidden_states = Gather.apply(sequence_parallel_group, hidden_states, 1)
 
             hidden_states = hidden_states.reshape(
                 batch_size, num_frames, hidden_states_height, hidden_states_width, -1

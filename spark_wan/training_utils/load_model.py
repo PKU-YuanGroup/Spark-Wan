@@ -153,17 +153,18 @@ def load_model(
             find_unused_parameters=find_unused_parameters,
         )
 
-    if model_config.fsdp_discriminator:
-        prepare_fsdp_model(
-            discriminator,
-            shard_conditions=[lambda n, m: isinstance(m, WanTransformerBlock)],
-            cpu_offload="discriminator" in model_config.cpu_offload,
-            reshard_after_forward="discriminator" in model_config.reshard_after_forward,  # Discriminator need to reshard after forward.
-            weight_dtype=weight_dtype,
-        )
-    else:
-        discriminator = discriminator.to(device)
-        discriminator = DistributedDataParallel(discriminator, device_ids=[device])
+    if discriminator:
+        if model_config.fsdp_discriminator:
+            prepare_fsdp_model(
+                discriminator,
+                shard_conditions=[lambda n, m: isinstance(m, WanTransformerBlock)],
+                cpu_offload="discriminator" in model_config.cpu_offload,
+                reshard_after_forward="discriminator" in model_config.reshard_after_forward,  # Discriminator need to reshard after forward.
+                weight_dtype=weight_dtype,
+            )
+        else:
+            discriminator = discriminator.to(device)
+            discriminator = DistributedDataParallel(discriminator, device_ids=[device])
     
     if model_config.fsdp_text_encoder:
         prepare_fsdp_model(

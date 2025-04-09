@@ -38,7 +38,7 @@ def parse_args():
         default="/mnt/workspace/checkpoints/Wan2.1-T2V-14B-Diffusers/",
     )
     parser.add_argument("--transformer_subfolder", type=str, default="transformer")
-    parser.add_argument("--lora_path", type=Optional[str], default=None)
+    parser.add_argument("--lora_path", type=str, default=None)
     parser.add_argument("--weight_dtype", type=str, default="bf16")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--height", type=int, default=720)
@@ -98,13 +98,13 @@ def infer(args):
             "ffn.net.2",
         ]
         lora_config = LoraConfig(
-            r=64,
-            lora_alpha=128,
+            r=256,
+            lora_alpha=512,
             target_modules=lora_target_modules,
         )
         transformer = get_peft_model(transformer, lora_config)
 
-        state_dict = load_file(args.lora_path, device_map="cpu")
+        state_dict = load_file(args.lora_path, device="cpu")
 
         _, unexpected_keys = transformer.load_state_dict(state_dict, strict=False)
         assert len(unexpected_keys) == 0
@@ -128,6 +128,10 @@ def infer(args):
 
     idx = 0
     for prompt in tqdm(prompts):
+        video_path = f"{args.output_dir}/output_{idx}.mp4"
+        if os.path.exists(video_path):
+            idx += 1
+            continue
         generator = torch.Generator(device="cuda").manual_seed(seed)
         with torch.amp.autocast("cuda", dtype=weight_dtype):
             pt_images = pipe(
@@ -145,7 +149,6 @@ def infer(args):
         image_np = VaeImageProcessor.pt_to_numpy(pt_images)
         image_pil = VaeImageProcessor.numpy_to_pil(image_np)
         if dist.get_rank() == 0:
-            video_path = f"{args.output_dir}/output_{idx}.mp4"
             export_to_video(image_pil, video_path, fps=16)
         idx += 1
 

@@ -1,11 +1,11 @@
-output_dir: D14B_16_8_formal
+output_dir: D14B_8_4_formal
 logging_dir: logs
 seed: 42
 
 report_to:
   wandb: true
   project_name: Spark-Wan
-  wandb_name: D14B_16_8_formal
+  wandb_name: D14B_8_4_formal
   wandb_notes: ""
   
 parallel_config:
@@ -38,7 +38,7 @@ model_config:
   disc_lora_rank: 128
   disc_lora_alpha: 256.0
   disc_lora_dropout: 0.0
-  transformer_subfolder: "distill_16"
+  transformer_subfolder: "distill_8"
   disc_target_modules: null # set to null but not null inner.
 
 validation_config:
@@ -52,7 +52,7 @@ training_config:
   resume_from_checkpoint: null
   gradient_accumulation_steps: 1
   max_train_steps: null
-  checkpointing_steps: 100
+  checkpointing_steps: 50
   train_batch_size: 1
   num_train_epochs: 10
   gradient_checkpointing: true
@@ -83,6 +83,6 @@ step_distill_config:
   discriminator_dropout: 0.0
   discriminator_copy_num_layers: 40
   default_disc_weight: 8e5
-  discriminator_head_type: complex
+  discriminator_head_type: seaweed
   discriminator_seaweed_output_layer: [-1, -17, -33]
   disc_loss_type: d_loss

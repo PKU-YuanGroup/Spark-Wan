@@ -1,11 +1,11 @@
-output_dir: D1_3B_16_8_formal_many_len
+output_dir: D1_3B_16_8_only_l1
 logging_dir: logs
 seed: 42
 
 report_to:
   wandb: true
   project_name: Spark-Wan
-  wandb_name: D1_3B_16_8_formal_many_len
+  wandb_name: D1_3B_16_8_only_l1
   wandb_notes: ""
   
 parallel_config:
@@ -83,6 +83,6 @@ step_distill_config:
   discriminator_dropout: 0.0
   discriminator_copy_num_layers: 30
   default_disc_weight: 1.0
-  discriminator_head_type: seaweed
+  discriminator_head_type: complex
   discriminator_seaweed_output_layer: [-1, -9, -17]
   disc_loss_type: d_loss
