@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
+
 def calculate_adaptive_weight(nll_loss, g_loss, last_layer=None):
     if nll_loss == 0:
         return torch.tensor(1)
@@ -22,6 +23,7 @@ def hinge_d_loss(logits_real, logits_fake):
     loss_fake = torch.mean(F.relu(1.0 + logits_fake))
     d_loss = 0.5 * (loss_real + loss_fake)
     return d_loss
+
 
 def d_loss(logits_real, logits_fake):
     bce = nn.BCEWithLogitsLoss()

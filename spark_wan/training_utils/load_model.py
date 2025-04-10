@@ -1,9 +1,14 @@
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import torch
 from peft import LoraConfig, PeftModel, get_peft_model
 from spark_wan.models.autoencoder_wan import AutoencoderKLWan
-from spark_wan.training_utils.train_config import ModelConfig, APTDistillConfig, StepDistillConfig, TrainingConfig
+from spark_wan.training_utils.train_config import (
+    ModelConfig,
+    APTDistillConfig,
+    StepDistillConfig,
+    TrainingConfig,
+)
 from spark_wan.models.transformer_wan import WanTransformer3DModel, WanTransformerBlock
 from spark_wan.models.discriminator_wan import WanDiscriminator
 from spark_wan.modules.fp32_norm import FP32RMSNorm
@@ -35,7 +40,13 @@ def load_model(
     weight_dtype: torch.dtype,
     lora_target_modules: List[str] = [],
     find_unused_parameters: bool = False,
-) -> Tuple[AutoTokenizer, UMT5EncoderModel, WanTransformer3DModel, AutoencoderKLWan, WanDiscriminator]:
+) -> Tuple[
+    AutoTokenizer,
+    UMT5EncoderModel,
+    WanTransformer3DModel,
+    AutoencoderKLWan,
+    WanDiscriminator,
+]:
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
@@ -48,7 +59,8 @@ def load_model(
 
     # Load transformer
     transformer = WanTransformer3DModel.from_pretrained(
-        model_config.pretrained_model_name_or_path, subfolder=model_config.transformer_subfolder
+        model_config.pretrained_model_name_or_path,
+        subfolder=model_config.transformer_subfolder,
     )
     transformer = replace_rmsnorm_with_fp32(transformer)
 
@@ -56,20 +68,22 @@ def load_model(
     vae = AutoencoderKLWan.from_pretrained(
         model_config.pretrained_model_name_or_path, subfolder="vae"
     )
-    
+
     # Load discriminator
     enable_discriminator = True
     if hasattr(distill_config, "is_gan_distill"):
         enable_discriminator = distill_config.is_gan_distill
-    
+
     discriminator = None
     if enable_discriminator:
         dic_model_config = transformer.config
         dic_model_config["num_layers"] = distill_config.discriminator_copy_num_layers
         dic_model_config["cnn_dropout"] = distill_config.discriminator_dropout
         dic_model_config["head_type"] = distill_config.discriminator_head_type
-        dic_model_config["seaweed_output_layer"] = distill_config.discriminator_seaweed_output_layer
-        
+        dic_model_config["seaweed_output_layer"] = (
+            distill_config.discriminator_seaweed_output_layer
+        )
+
         discriminator = WanDiscriminator(
             **dic_model_config,
         )
@@ -77,8 +91,10 @@ def load_model(
         missing_keys, unexpected_keys = discriminator.load_state_dict(
             pretrained_checkpoint, strict=False
         )
-        assert len(unexpected_keys) == 3, f"Unexpected keys: {unexpected_keys}" # ['scale_shift_table', 'proj_out.weight', 'proj_out.bias']
-        
+        assert (
+            len(unexpected_keys) == 3
+        ), f"Unexpected keys: {unexpected_keys}"  # ['scale_shift_table', 'proj_out.weight', 'proj_out.bias']
+
         discriminator = replace_rmsnorm_with_fp32(discriminator)
         if training_config.disc_gradient_checkpointing:
             discriminator.enable_gradient_checkpointing()
@@ -98,7 +114,7 @@ def load_model(
                 init_lora_weights=True,
             )
             discriminator = get_peft_model(discriminator, lora_config)
-    
+
     # Setup models
     text_encoder.requires_grad_(False)
     text_encoder.eval()
@@ -127,12 +143,12 @@ def load_model(
             )
     else:
         transformer.requires_grad_(True)
-    
+
     # For debug
     output_grad_info(transformer, "transformer_grad_info.txt")
     if discriminator:
         output_grad_info(discriminator, "discriminator_grad_info.txt")
-    
+
     # Compile transformer
     if model_config.compile_transformer:
         transformer = torch.compile(transformer)
@@ -160,13 +176,14 @@ def load_model(
                 discriminator,
                 shard_conditions=[lambda n, m: isinstance(m, WanTransformerBlock)],
                 cpu_offload="discriminator" in model_config.cpu_offload,
-                reshard_after_forward="discriminator" in model_config.reshard_after_forward,  # Discriminator need to reshard after forward.
+                reshard_after_forward="discriminator"
+                in model_config.reshard_after_forward,  # Discriminator need to reshard after forward.
                 weight_dtype=weight_dtype,
             )
         else:
             discriminator = discriminator.to(device)
             discriminator = DistributedDataParallel(discriminator, device_ids=[device])
-    
+
     if model_config.fsdp_text_encoder:
         prepare_fsdp_model(
             text_encoder,

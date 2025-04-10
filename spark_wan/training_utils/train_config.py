@@ -111,6 +111,7 @@ class TrainingConfig:
 class ParallelConfig:
     sp_size: int = field(default=1)
 
+
 @dataclass
 class StepDistillConfig:
     teacher_step: int = field(default=32)
@@ -132,6 +133,7 @@ class StepDistillConfig:
     disc_loss_type: str = field(default="hinge")
     discriminator_seaweed_output_layer: List[int] = field(default_factory=lambda: [-1])
 
+
 @dataclass
 class APTDistillConfig:
     is_gan_distill: bool = field(default=True)
@@ -145,7 +147,7 @@ class APTDistillConfig:
     default_disc_weight: float = field(default=1e5)
     disc_loss_type: str = field(default="hinge")
     discriminator_seaweed_output_layer: List[int] = field(default_factory=lambda: [-1])
-    
+
 
 @dataclass
 class SelfLayerDistillConfig:

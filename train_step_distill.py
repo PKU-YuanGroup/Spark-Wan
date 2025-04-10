@@ -11,31 +11,29 @@ import os
 import torch
 import torch.distributed as dist
 import transformers
-from spark_wan.models.discriminator_wan import WanDiscriminator
 from spark_wan.parrallel.env import setup_sequence_parallel_group
 from spark_wan.training_utils.fsdp2_utils import (
     load_model_state,
     load_optimizer_state,
     load_state,
-    prepare_fsdp_model,
     save_state,
     unwrap_model,
 )
-from spark_wan.training_utils.gan_utils import calculate_adaptive_weight, hinge_d_loss, d_loss
+from spark_wan.training_utils.gan_utils import (
+    calculate_adaptive_weight,
+    hinge_d_loss,
+    d_loss,
+)
 from spark_wan.training_utils.input_process import encode_prompt
 from spark_wan.training_utils.load_dataset import load_easyvideo_dataset
 from spark_wan.training_utils.load_model import (
-    DistributedDataParallel,
-    WanTransformerBlock,
     load_model,
-    replace_rmsnorm_with_fp32,
 )
 from spark_wan.training_utils.load_optimizer import get_optimizer
 from spark_wan.training_utils.train_config import Args
 from torch.amp import GradScaler
 from tqdm.auto import tqdm
 
-from peft import LoraConfig, get_peft_model
 
 import diffusers
 from diffusers import (
@@ -68,7 +66,7 @@ def main(args: Args):
     setup_distributed_env()
 
     set_seed(args.seed)
-    
+
     global_rank = dist.get_rank()
     local_rank = int(os.environ["LOCAL_RANK"])
     device = torch.cuda.current_device()
@@ -114,7 +112,7 @@ def main(args: Args):
         "time_embedder.linear_1",
         "time_embedder.linear_2",
         "time_proj",
-        "patch_embedding"
+        "patch_embedding",
     ]
     tokenizer, text_encoder, transformer, vae, discriminator = load_model(
         model_config=args.model_config,
@@ -122,7 +120,7 @@ def main(args: Args):
         distill_config=args.step_distill_config,
         weight_dtype=weight_dtype,
         device=device,
-        lora_target_modules=lora_target_modules
+        lora_target_modules=lora_target_modules,
     )
 
     # Setup distillation parameters
@@ -214,7 +212,7 @@ def main(args: Args):
         setup_sequence_parallel_group(args.parallel_config.sp_size)
     )
     set_seed(args.seed + dp_rank)
-    
+
     # Load dataset
     train_dataloader, sampler = load_easyvideo_dataset(
         height=args.data_config.height,
@@ -225,7 +223,7 @@ def main(args: Args):
         dataloader_num_workers=args.data_config.dataloader_num_workers,
         dp_rank=dp_rank,
         dp_size=dp_size,
-        seed=args.seed
+        seed=args.seed,
     )
 
     # Initialize tracker
@@ -480,7 +478,9 @@ def main(args: Args):
             if (
                 args.step_distill_config.is_gan_distill
             ):  # If training with discriminator
-                real_global_step = (global_step + 1) // args.training_config.gradient_accumulation_steps
+                real_global_step = (
+                    global_step + 1
+                ) // args.training_config.gradient_accumulation_steps
                 is_generator_step = (
                     real_global_step % args.step_distill_config.disc_interval == 0
                     or real_global_step < args.step_distill_config.disc_start
@@ -514,10 +514,12 @@ def main(args: Args):
                         if args.step_distill_config.disc_loss_type == "hinge":
                             g_loss = -torch.mean(score_student)
                         else:
-                            g_loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                                score_student,
-                                torch.ones_like(score_student),
-                                reduction="mean",
+                            g_loss = (
+                                torch.nn.functional.binary_cross_entropy_with_logits(
+                                    score_student,
+                                    torch.ones_like(score_student),
+                                    reduction="mean",
+                                )
                             )
 
                         if args.step_distill_config.adaptive_weight:
@@ -555,12 +557,15 @@ def main(args: Args):
                     )
                     loss = loss / args.training_config.gradient_accumulation_steps
                     scaler.scale(loss).backward()
-                    
-                    if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
+
+                    if (
+                        global_step + 1
+                    ) % args.training_config.gradient_accumulation_steps == 0:
                         if args.training_config.graident_clipping:
                             scaler.unscale_(optimizer)
                             torch.nn.utils.clip_grad_norm_(
-                                transformer_lora_parameters, args.training_config.max_grad_norm
+                                transformer_lora_parameters,
+                                args.training_config.max_grad_norm,
                             )
                         scaler.step(optimizer)
                         scaler.update()
@@ -584,10 +589,12 @@ def main(args: Args):
                         loss = hinge_d_loss(score_teacher, score_student)
                     else:
                         loss = d_loss(score_teacher, score_student)
-                        
+
                     loss = loss / args.training_config.gradient_accumulation_steps
                     scaler.scale(loss).backward()
-                    if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
+                    if (
+                        global_step + 1
+                    ) % args.training_config.gradient_accumulation_steps == 0:
                         if args.training_config.graident_clipping:
                             scaler.unscale_(disc_optimizer)
                             torch.nn.utils.clip_grad_norm_(
@@ -605,11 +612,14 @@ def main(args: Args):
                 loss = rec_loss
                 loss = loss / args.training_config.gradient_accumulation_steps
                 scaler.scale(loss).backward()
-                if (global_step + 1) % args.training_config.gradient_accumulation_steps == 0:
+                if (
+                    global_step + 1
+                ) % args.training_config.gradient_accumulation_steps == 0:
                     if args.training_config.graident_clipping:
                         scaler.unscale_(optimizer)
                         torch.nn.utils.clip_grad_norm_(
-                            transformer_lora_parameters, args.training_config.max_grad_norm
+                            transformer_lora_parameters,
+                            args.training_config.max_grad_norm,
                         )
                     scaler.step(optimizer)
                     scaler.update()
@@ -617,14 +627,18 @@ def main(args: Args):
                     lr_scheduler.step()
 
             global_step += 1
-            real_global_step = global_step // args.training_config.gradient_accumulation_steps
-            is_real_step = global_step % args.training_config.gradient_accumulation_steps == 0
-            
+            real_global_step = (
+                global_step // args.training_config.gradient_accumulation_steps
+            )
+            is_real_step = (
+                global_step % args.training_config.gradient_accumulation_steps == 0
+            )
+
             if not is_real_step:
                 continue
-            
+
             progress_bar.update(1)
-            
+
             # Log to tracker
             if global_rank == 0:
                 if args.step_distill_config.is_gan_distill:
@@ -679,7 +693,9 @@ def main(args: Args):
                         model=unwrap_model(discriminator),
                         is_fsdp=args.model_config.fsdp_discriminator,
                         optimizer=disc_optimizer,
-                        save_key_filter="lora" if args.model_config.is_train_disc_lora else None,
+                        save_key_filter=(
+                            "lora" if args.model_config.is_train_disc_lora else None
+                        ),
                         save_name_prefix="discriminator",
                     )
 
@@ -723,7 +739,9 @@ def main(args: Args):
                         "width": args.data_config.width,
                         "num_inference_steps": step,
                     }
-                    with torch.no_grad() and torch.amp.autocast("cuda", dtype=weight_dtype):
+                    with torch.no_grad() and torch.amp.autocast(
+                        "cuda", dtype=weight_dtype
+                    ):
                         log_validation(
                             pipe=pipe,
                             args=args,
@@ -732,7 +750,10 @@ def main(args: Args):
                             phase_name="student/validation",
                             global_rank=global_rank,
                         )
-                    if real_global_step == 1 and args.validation_config.log_teacher_sample:
+                    if (
+                        real_global_step == 1
+                        and args.validation_config.log_teacher_sample
+                    ):
                         unwrap_model(transformer).disable_adapter_layers()
                         pipeline_args["guidance_scale"] = 5.0
                         with torch.no_grad():
@@ -755,7 +776,7 @@ def main(args: Args):
                                 global_rank=global_rank,
                             )
                         unwrap_model(transformer).enable_adapter_layers()
-                        
+
             if global_step >= args.training_config.max_train_steps:
                 break
 

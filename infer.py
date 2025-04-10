@@ -2,7 +2,6 @@ import sys
 import argparse
 
 sys.path.append(".")
-from typing import Literal, Optional
 import os
 
 import torch
@@ -52,6 +51,7 @@ def parse_args():
     parser.add_argument("--sampling_steps", type=int, default=32)
     return parser.parse_args()
 
+
 def infer(args):
     weight_dtype = torch.bfloat16
     seed = args.seed
@@ -99,7 +99,7 @@ def infer(args):
             "time_embedder.linear_1",
             "time_embedder.linear_2",
             "time_proj",
-            "patch_embedding"
+            "patch_embedding",
         ]
         lora_config = LoraConfig(
             r=256,

@@ -2,7 +2,7 @@ import sys
 import argparse
 
 sys.path.append(".")
-from typing import Literal, Optional
+from typing import Optional
 import os
 import numpy as np
 import json
@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument("--sp_size", type=int, default=8)
     parser.add_argument("--sampling_steps", type=int, default=32)
     return parser.parse_args()
+
 
 def infer(args):
     weight_dtype = torch.bfloat16

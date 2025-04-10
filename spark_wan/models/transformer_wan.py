@@ -656,9 +656,10 @@ class WanTransformer3DModel(
         output_hidden_states: bool = False,
         output_hidden_states_idx: Optional[List[int]] = None,
     ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
-        assert not self.is_partial_layer, "Partial layer is not supported. You need to implement a new forward function."
-        
-        
+        assert (
+            not self.is_partial_layer
+        ), "Partial layer is not supported. You need to implement a new forward function."
+
         if output_hidden_states_idx is None:
             output_hidden_states_idx = []
 
@@ -824,7 +825,4 @@ class WanTransformer3DModel(
         if not return_dict:
             return (output,)
 
-        return {
-            "sample": output,
-            "hidden_states": hidden_states_list
-        }
+        return {"sample": output, "hidden_states": hidden_states_list}

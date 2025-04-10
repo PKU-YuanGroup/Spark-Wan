@@ -15,10 +15,6 @@
 from torch._tensor import Tensor
 
 
-from torch._tensor import Tensor
-
-
-from torch._tensor import Tensor
 from typing import Any, Dict, Optional, Tuple, Union, List
 
 import torch
@@ -50,7 +46,7 @@ class SeaweedOutputHead(nn.Module):
         qk_norm: str,
         eps: float,
         embed_seq_len: int = 1024,
-        dropout: float = 0.0
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.embed = nn.Parameter(torch.randn(1, embed_seq_len, hidden_dim))
@@ -349,19 +345,25 @@ class WanDiscriminator(WanTransformer3DModel):
                     timestep_proj,
                     rotary_emb,
                 )
-                if self.need_save_hidden_states and idx in self.seaweed_output_layer_idx:
+                if (
+                    self.need_save_hidden_states
+                    and idx in self.seaweed_output_layer_idx
+                ):
                     hidden_states_list.append(hidden_states)
         else:
             for idx, block in enumerate(self.blocks):
                 hidden_states = block(
                     hidden_states, encoder_hidden_states, timestep_proj, rotary_emb
                 )
-                if self.need_save_hidden_states and idx in self.seaweed_output_layer_idx:
+                if (
+                    self.need_save_hidden_states
+                    and idx in self.seaweed_output_layer_idx
+                ):
                     hidden_states_list.append(hidden_states)
 
         if self.config.head_type == "seaweed":
             output_list = []
-            
+
             for idx, hidden_states in enumerate(hidden_states_list):
                 output_list.append(self.seaweed_output_layers[idx](hidden_states))
 
