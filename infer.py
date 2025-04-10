@@ -96,6 +96,10 @@ def infer(args):
             "proj_out",
             "ffn.net.0.proj",
             "ffn.net.2",
+            "time_embedder.linear_1",
+            "time_embedder.linear_2",
+            "time_proj",
+            "patch_embedding"
         ]
         lora_config = LoraConfig(
             r=256,

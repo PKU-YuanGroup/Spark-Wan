@@ -5,10 +5,11 @@ torchrun --nproc_per_node=8 infer.py \
     --height 720 \
     --width 1280 \
     --num_frames 81 \
-    --sampling_steps 8 \
+    --sampling_steps 4 \
     --cfg 0.0 \
     --seed 2002 \
     --prompt_file scripts/prompt_t2v.txt \
     --flow_shift 7.0 \
+    --lora_path /mnt/data/lzj/codes/spark-wan/D14B_8_4_formal/checkpoint-250/model.safetensors \
     --transformer_subfolder "distill_8" \
-    --output_dir "output/14B_8_final"
+    --output_dir "output/14B_4"

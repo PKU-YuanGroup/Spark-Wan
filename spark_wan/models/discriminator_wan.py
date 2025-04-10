@@ -50,6 +50,7 @@ class SeaweedOutputHead(nn.Module):
         qk_norm: str,
         eps: float,
         embed_seq_len: int = 1024,
+        dropout: float = 0.0
     ):
         super().__init__()
         self.embed = nn.Parameter(torch.randn(1, embed_seq_len, hidden_dim))
@@ -59,6 +60,7 @@ class SeaweedOutputHead(nn.Module):
             kv_heads=num_attention_heads,
             dim_head=attention_head_dim,
             qk_norm=qk_norm,
+            dropout=dropout,
             eps=eps,
             bias=True,
             cross_attention_dim=None,
@@ -241,7 +243,8 @@ class WanDiscriminator(WanTransformer3DModel):
                         attention_head_dim=attention_head_dim,
                         qk_norm=qk_norm,
                         eps=eps,
-                        embed_seq_len=embed_seq_len
+                        embed_seq_len=embed_seq_len,
+                        dropout=cnn_dropout,
                     )
                     for _ in self.seaweed_output_layer_idx
                 ]

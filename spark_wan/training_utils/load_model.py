@@ -88,6 +88,7 @@ def load_model(
             discriminator.disc_head.requires_grad_(True)
             if hasattr(discriminator, "seaweed_output_layers"):
                 for layer in discriminator.seaweed_output_layers:
+                    layer.embed.requires_grad_(True)
                     layer.requires_grad_(True)
             lora_config = LoraConfig(
                 r=model_config.disc_lora_rank,
