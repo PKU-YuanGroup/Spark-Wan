@@ -10,3 +10,7 @@ wandb/
 *.mp4
 *.whl
 *.txt
+*examples
+*output
+check_data.py
+.gradio

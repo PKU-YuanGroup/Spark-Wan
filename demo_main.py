@@ -1,10 +1,6 @@
-import sys
+import os
 import argparse
 
-sys.path.append(".")
-import os
-
-import time
 import torch
 import torch.distributed as dist
 from diffusers import AutoencoderKLWan
@@ -12,12 +8,32 @@ from diffusers.schedulers import UniPCMultistepScheduler
 from diffusers.utils import export_to_video
 from diffusers import WanPipeline
 from diffusers.image_processor import VaeImageProcessor
+from peft import LoraConfig, get_peft_model
+import fcntl
+from safetensors.torch import load_file
+
+from diffusers.training_utils import free_memory
+
+import sys
+sys.path.append(".")
 from spark_wan.models.transformer_wan import WanTransformer3DModel
 from spark_wan.training_utils.load_model import replace_rmsnorm_with_fp32
 from spark_wan.parrallel.env import init_sequence_parallel_group
-from peft import LoraConfig, get_peft_model
-from tqdm import tqdm
-from safetensors.torch import load_file
+
+config_path = "config_temp.txt"
+file_path = "file_temp.txt"
+
+
+def read_params_from_txt(file_path):
+    params = {}
+    try:
+        with open(file_path, "r") as file:
+            for line in file:
+                key, value = line.strip().split("=")
+                params[key] = value
+    except Exception:
+        pass
+    return params
 
 
 def init_env(sp_size: int = 8):
@@ -37,7 +53,7 @@ def parse_args():
         type=str,
         default="/mnt/data/checkpoints/Wan-AI/Wan2.1-T2V-14B-Diffusers",
     )
-    parser.add_argument("--transformer_subfolder", type=str, default="distill_8")
+    parser.add_argument("--transformer_subfolder", type=str, default="distill_4")
     parser.add_argument("--lora_path", type=str, default=None)
     parser.add_argument("--weight_dtype", type=str, default="bf16")
     parser.add_argument("--seed", type=int, default=2002)
@@ -45,21 +61,17 @@ def parse_args():
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--num_frames", type=int, default=81)
     parser.add_argument("--cfg", type=float, default=0.0)
-    parser.add_argument(
-        "--prompt_file",
-        type=str,
-        default="/mnt/workspace/ysh/Code/Wan-Distill/Spark-Wan/scripts/prompt_t2v_single.txt",
-    )
+    parser.add_argument("--prompt_file", type=str, default="scripts/sora.txt")
     parser.add_argument("--output_dir", type=str, default="output")
     parser.add_argument("--flow_shift", type=float, default=7.0)
     parser.add_argument("--sp_size", type=int, default=8)
-    parser.add_argument("--sampling_steps", type=int, default=8)
+    parser.add_argument("--sampling_steps", type=int, default=4)
     return parser.parse_args()
 
 
 def infer(args):
     weight_dtype = torch.bfloat16
-    seed = args.seed
+    output_dir = args.output_dir
 
     # Define weight dtype
     if args.weight_dtype == "fp16":
@@ -70,8 +82,6 @@ def infer(args):
         raise ValueError("weight_dtype must be fp16 or bf16")
 
     # Get prompts
-    with open(args.prompt_file, "r") as file:
-        prompts = [line.strip() for line in file.readlines()]
     negative_prompt = "Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"
 
     # Make output dir
@@ -135,41 +145,91 @@ def infer(args):
 
     pipe = pipe.to(device="cuda")
 
-    # if True:
-    #     import torch.nn.functional as F
-    #     from sageattention import sageattn
+    while True:
+        print("Waiting Input")
+        while True:
+            params = read_params_from_txt(config_path)
+            if params != {}:
+                print(params)
+                break
 
-    #     F.scaled_dot_product_attention = sageattn
+        if int(params["height"]) == 960 and int(params["width"]) == 960:
+            params["height"] = 720
+            params["width"] = 1280
+        args.prompt = (
+            params["prompt"]
+            if isinstance(params["prompt"], list)
+            else [params["prompt"]]
+        )
+        args.height = int(params["height"])
+        args.width = int(params["width"])
+        args.sampling_steps = int(params["num_inference_steps"])
+        args.num_frames = int(params["video_length"])
+        args.seed = int(params["seed"])
 
-    idx = 0
-    for prompt in tqdm(prompts):
-        video_path = f"{args.output_dir}/output_{idx}.mp4"
-        if os.path.exists(video_path):
-            idx += 1
-            continue
-        generator = torch.Generator(device="cuda").manual_seed(seed)
         with torch.amp.autocast("cuda", dtype=weight_dtype):
-            start_time = time.time()
             pt_images = pipe(
-                prompt=prompt,
+                prompt=args.prompt,
                 negative_prompt=negative_prompt,
                 height=args.height,
                 width=args.width,
                 num_inference_steps=args.sampling_steps,
                 num_frames=args.num_frames,
                 guidance_scale=args.cfg,
-                generator=generator,
+                generator=torch.Generator(device="cuda").manual_seed(args.seed),
                 output_type="pt",
             ).frames[0]
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            print(f"推理耗时: {elapsed_time:.2f}秒")
         pt_images = torch.stack([pt_images[i] for i in range(pt_images.shape[0])])
         image_np = VaeImageProcessor.pt_to_numpy(pt_images)
         image_pil = VaeImageProcessor.numpy_to_pil(image_np)
         if dist.get_rank() == 0:
+            file_count = len(
+                [
+                    f
+                    for f in os.listdir(output_dir)
+                    if os.path.isfile(os.path.join(output_dir, f))
+                ]
+            )
+            video_path = f"{output_dir}/{file_count:04d}.mp4"
             export_to_video(image_pil, video_path, fps=16)
-        idx += 1
+
+            with open(file_path, "w") as file:
+                fcntl.flock(file, fcntl.LOCK_EX)
+                file.write(f"video_path={video_path}\n")
+                fcntl.flock(file, fcntl.LOCK_UN)
+
+        del pt_images
+        with open(config_path, "w") as file:
+            fcntl.flock(file, fcntl.LOCK_EX)
+            file.write("")
+            fcntl.flock(file, fcntl.LOCK_UN)
+        free_memory()
+
+    # idx = 0
+    # for prompt in tqdm(prompts):
+    #     video_path = f"{args.output_dir}/output_{idx}.mp4"
+    #     if os.path.exists(video_path):
+    #         idx += 1
+    #         continue
+    #     generator = torch.Generator(device="cuda").manual_seed(seed)
+    #     with torch.amp.autocast("cuda", dtype=weight_dtype):
+    #         pt_images = pipe(
+    #             prompt=prompt,
+    #             negative_prompt=negative_prompt,
+    #             height=args.height,
+    #             width=args.width,
+    #             num_inference_steps=args.sampling_steps,
+    #             num_frames=args.num_frames,
+    #             guidance_scale=args.cfg,
+    #             generator=generator,
+    #             output_type="pt",
+    #         ).frames[0]
+    #     pt_images = torch.stack([pt_images[i] for i in range(pt_images.shape[0])])
+    #     image_np = VaeImageProcessor.pt_to_numpy(pt_images)
+    #     image_pil = VaeImageProcessor.numpy_to_pil(image_np)
+    #     if dist.get_rank() == 0:
+    #         export_to_video(image_pil, video_path, fps=16)
+    #     idx += 1
 
     # End inference
     dist.destroy_process_group()
