@@ -135,12 +135,6 @@ def infer(args):
 
     pipe = pipe.to(device="cuda")
 
-    # if True:
-    #     import torch.nn.functional as F
-    #     from sageattention import sageattn
-
-    #     F.scaled_dot_product_attention = sageattn
-
     idx = 0
     for prompt in tqdm(prompts):
         video_path = f"{args.output_dir}/output_{idx}.mp4"

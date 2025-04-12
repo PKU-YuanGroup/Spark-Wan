@@ -138,7 +138,7 @@ def create_demo():
                 num_inference_steps = gr.Slider(
                     1, 100, value=4, step=1, label="Number of Inference Steps"
                 )
-                seed = gr.Number(value=2002, label="Seed (-1 for random)")
+                seed = gr.Number(value=-1, label="Seed (-1 for random)")
                 generate_btn = gr.Button("Generate")
 
             with gr.Column():
