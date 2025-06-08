@@ -4,6 +4,11 @@ import random
 
 import fcntl
 
+os.environ.pop('http_proxy', None)
+os.environ.pop('https_proxy', None)
+os.environ.pop('HTTP_PROXY', None)
+os.environ.pop('HTTPS_PROXY', None)
+
 config_path = "config_temp.txt"
 file_path = "file_temp.txt"
 with open(config_path, "w") as file:
@@ -15,7 +20,6 @@ with open(file_path, "w") as file:
     fcntl.flock(file, fcntl.LOCK_EX)
     file.write("")
     fcntl.flock(file, fcntl.LOCK_UN)
-
 
 def write_params_to_txt(
     file_path, prompt, width, height, video_length, seed, num_inference_steps
@@ -170,5 +174,5 @@ if __name__ == "__main__":
     server_name = os.getenv("SERVER_NAME", "0.0.0.0")
     server_port = int(os.getenv("SERVER_PORT", "7860"))
     demo = create_demo()
-    # demo.launch(server_name=server_name, server_port=server_port, share=False)
-    demo.launch(share=True)
+    demo.launch(server_name=server_name, server_port=server_port, share=True)
+    # demo.launch(share=True)

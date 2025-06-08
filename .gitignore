@@ -14,3 +14,5 @@ wandb/
 *output
 check_data.py
 .gradio
+*step*
+*output*

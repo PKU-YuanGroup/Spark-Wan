@@ -2,6 +2,7 @@ import os
 import argparse
 
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 from diffusers import AutoencoderKLWan
 from diffusers.schedulers import UniPCMultistepScheduler
@@ -19,9 +20,30 @@ sys.path.append(".")
 from spark_wan.models.transformer_wan import WanTransformer3DModel
 from spark_wan.training_utils.load_model import replace_rmsnorm_with_fp32
 from spark_wan.parrallel.env import init_sequence_parallel_group
+from taehv.taehv import TAEHV
 
 config_path = "config_temp.txt"
 file_path = "file_temp.txt"
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+class DotDict(dict):
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+
+class TAEW2_1DiffusersWrapper(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.dtype = torch.float16
+        self.device = "cuda"
+        self.taehv = TAEHV("taehv/taew2_1.pth").to(self.dtype)
+        self.temperal_downsample = [True, True, False] # [sic]
+        self.config = DotDict(scaling_factor=1.0, latents_mean=torch.zeros(16), z_dim=16, latents_std=torch.ones(16))
+
+    def decode(self, latents, return_dict=None):
+        n, c, t, h, w = latents.shape
+        # low-memory, set parallel=True for faster + higher memory
+        return (self.taehv.decode_video(latents.transpose(1, 2), parallel=True).transpose(1, 2).mul_(2).sub_(1),)
 
 
 def read_params_from_txt(file_path):
@@ -143,6 +165,8 @@ def infer(args):
         torch_dtype=weight_dtype,
     )
 
+    pipe.vae = TAEW2_1DiffusersWrapper().to("cuda")
+
     pipe = pipe.to(device="cuda")
 
     while True:
@@ -232,10 +256,15 @@ def infer(args):
     #     idx += 1
 
     # End inference
-    dist.destroy_process_group()
+    # dist.destroy_process_group()
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    init_env(args.sp_size)
-    infer(args)
+    while True:
+        try:
+            args = parse_args()
+            init_env(args.sp_size)
+            infer(args)
+        except:
+            free_memory()
+            continue
