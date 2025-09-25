@@ -12,3 +12,4 @@ wandb/
 *.txt
 test.ipynb
 test.py
+.DS_Store
