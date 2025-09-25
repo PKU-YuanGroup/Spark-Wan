@@ -105,8 +105,3 @@
 # 🔒 License
 
 This project is released under the Apache 2.0 license as found in the [LICENSE](LICENSE) file.
-
-
-# 🔒 License
-
-This project is released under the Apache 2.0 license as found in the [LICENSE](LICENSE) file.
