@@ -68,21 +68,21 @@
   <tbody>
     <tr>
       <td>
-        <video src="https://github.com/user-attachments/assets/39f1810e-f1ff-4b09-b254-71c152fec746" autoplay controls></video>
-      </td>
-      <td>
         <video src="https://github.com/user-attachments/assets/42dd4ec7-46ec-4ae6-826f-b4b983d95c9b" autoplay controls></video>
       </td>
       <td>
         <video src="https://github.com/user-attachments/assets/08261e93-a614-44c7-b252-9a440cde57fe" autoplay controls></video>
       </td>
-    </tr>
-    <tr>
       <td>
         <video src="https://github.com/user-attachments/assets/bd8ca361-3e03-45e5-87bb-87cbe996d0a0" autoplay controls></video>
       </td>
+    </tr>
+    <tr>
       <td>
         <video src="https://github.com/user-attachments/assets/cdefcf71-90f3-4897-8a26-9aa60fdb0eaa" autoplay controls></video>
+      </td>
+      <td>
+        <video src="https://github.com/user-attachments/assets/39f1810e-f1ff-4b09-b254-71c152fec746" autoplay controls></video>
       </td>
       <td>
         <video src="https://github.com/user-attachments/assets/e3f5f943-a174-4b28-a7a9-9b40c41f018c" autoplay controls></video>
