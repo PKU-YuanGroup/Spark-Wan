@@ -1,0 +1,14 @@
+dataset_cache
+logs
+*.pth
+*.safetensors
+*.pt
+*.ckpt
+*.safetensors
+**/__pycache__/**
+wandb/
+*.mp4
+*.whl
+*.txt
+test.ipynb
+test.py

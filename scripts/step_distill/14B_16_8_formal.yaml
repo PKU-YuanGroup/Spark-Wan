@@ -1,0 +1,87 @@
+output_dir: D14B_16_8_formal
+logging_dir: logs
+seed: 42
+
+report_to:
+  wandb: true
+  project_name: Spark-Wan
+  wandb_name: D14B_16_8_formal
+  wandb_notes: ""
+  
+parallel_config:
+  sp_size: 8
+
+data_config:
+  instance_data_root: "scripts/sucai.json"
+  height: 720
+  width: 1280
+  fps: 16
+  max_num_frames: 81
+  dataloader_num_workers: 0
+
+model_config:
+  pretrained_lora_path: null
+  pretrained_model_name_or_path: "/mnt/data/checkpoints/Wan-AI/Wan2.1-T2V-14B-Diffusers"
+  compile_transformer: false
+  fsdp_transformer: true
+  fsdp_text_encoder: true
+  fsdp_discriminator: true
+  cpu_offload: ["text_encoder"]
+  reshard_after_forward: ["text_encoder", "transformer", "discriminator"]
+  lora_rank: 256
+  lora_alpha: 512.0
+  lora_dropout: 0.0
+  flow_shift: 7.0
+  is_train_lora: true
+  lora_target_modules: null # set to null but not null inner.
+  is_train_disc_lora: true
+  disc_lora_rank: 128
+  disc_lora_alpha: 256.0
+  disc_lora_dropout: 0.0
+  transformer_subfolder: "distill_16"
+  disc_target_modules: null # set to null but not null inner.
+
+validation_config:
+  validation_steps: 50
+  validation_prompt: "A stylish woman walks down a Tokyo street filled with warm glowing neon and animated city signage. She wears a black leather jacket, a long red dress, and black boots, and carries a black purse. She wears sunglasses and red lipstick. She walks confidently and casually. The street is damp and reflective, creating a mirror effect of the colorful lights. Many pedestrians walk about."
+  validation_prompt_separator: ":::"
+  num_validation_videos: 1
+  log_teacher_sample: false
+
+training_config:
+  resume_from_checkpoint: null
+  gradient_accumulation_steps: 1
+  max_train_steps: null
+  checkpointing_steps: 100
+  train_batch_size: 1
+  num_train_epochs: 10
+  gradient_checkpointing: true
+  disc_gradient_checkpointing: true
+  mixed_precision: bf16
+  learning_rate: 0.000005
+  lr_scheduler: constant
+  optimizer: adamw
+  adam_beta1: 0.0
+  adam_beta2: 0.99
+  adam_weight_decay: 0.0001
+  adam_epsilon: 1e-08
+  max_grad_norm: 1.0
+
+step_distill_config:
+  teacher_step: 16
+  student_step: 8
+  guidance_scale_max: 0
+  guidance_scale_min: 0
+  is_gan_distill: true
+  disc_interval: 2
+  disc_start: 0
+  distance_weight: 0.0
+  disc_weight: 1.0
+  scheduler_type: UniPC
+  adaptive_weight: false
+  reduce_func: sum
+  discriminator_dropout: 0.0
+  discriminator_copy_num_layers: 40
+  default_disc_weight: 8e5
+  discriminator_head_type: complex
+  disc_loss_type: d_loss
