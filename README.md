@@ -6,13 +6,14 @@
     
 [![hf](https://img.shields.io/badge/🤗-Hugging%20Face-blue.svg)](https://huggingface.co/chestnutlzj/Spark-Wan)
 [![License](https://img.shields.io/badge/Code%20License-Apache2.0-yellow)](https://github.com/PKU-YuanGroup/WF-VAE/blob/main/LICENSE)
-[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FPKU-YuanGroup%2FWF-VAE&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FPKU-YuanGroup%2FWF-VAE&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)
-[![GitHub repo stars](https://img.shields.io/github/stars/PKU-YuanGroup/WF-VAE?style=flat&logo=github&logoColor=whitesmoke&label=Stars)](https://github.com/PKU-YuanGroup/WF-VAE/stargazers)
+[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FPKU-YuanGroup%2FWF-VAE&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FPKU-YuanGroup%2FSpark-Wan&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)
+[![GitHub repo stars](https://img.shields.io/github/stars/PKU-YuanGroup/Spark-Wan?style=flat&logo=github&logoColor=whitesmoke&label=Stars)](https://github.com/PKU-YuanGroup/WF-VAE/stargazers)
 
 </h5>
 
 # 📰 News
 
+* **[2025.9.26]** 🔥🔥🔥 Release 4-steps LoRA in huggingface. [Click to download](https://huggingface.co/chestnutlzj/Spark-Wan-4Steps/tree/main).
 * **[2025.9.26]** 🔥🔥🔥 We open-source the distillation weights for 8-steps and 4-steps based on Wan2.1 14B, as well as the training code.
 
 # 🚀 Main Results
