@@ -13,7 +13,7 @@
 
 # 📰 News
 
-* **[2025.9.26]** 🔥🔥🔥 Release 4-steps LoRA in huggingface. [Click to download](https://huggingface.co/chestnutlzj/Spark-Wan-4Steps/tree/main).
+* **[2025.9.26]** 🔥🔥🔥 Release 4-steps merged checkpoint in huggingface. [Click to download](https://huggingface.co/chestnutlzj/Spark-Wan-4Steps/tree/main).
 * **[2025.9.26]** 🔥🔥🔥 We open-source the distillation weights for 8-steps and 4-steps based on Wan2.1 14B, as well as the training code.
 
 # 🚀 Main Results
