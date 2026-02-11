@@ -1,4 +1,13 @@
-<h2 align="center"> <a href="https://github.com/PKU-YuanGroup/Spark-Wan/">Spark-Wan</a></h2>
+<h2 align="center"> 
+    <a href="https://github.com/PKU-YuanGroup/Spark-Wan/">Spark-Wan: Few-Step Video Diffusion Transformer via Hybrid Adversarial Post-Training</a>
+</h2>
+
+<div align="center">
+    <a href="https://github.com/qqingzheng" target="_blank">Zongjian Li</a>,
+    <a href="https://github.com/SHYuanBest" target="_blank">Shenghai Yuan</a>,
+    <a href="https://yuanli2333.github.io" target="_blank">Li Yuan</a>,
+</div>
+
 <h5 align="center"> If you like our project, please give us a star ⭐ on GitHub for latest update.  </h2>
 
 
